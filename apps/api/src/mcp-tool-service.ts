@@ -40,6 +40,8 @@ import {
 import { audit, auditStatement } from "./audit";
 import type { AppContext, AuditActor, AuthContext, Bindings } from "./api-context";
 import { AppError } from "./app-error";
+import { readMcpAttachment } from "./mcp-attachment";
+import { enqueueInboxClassification, rescheduleInboxClassification } from "./inbox-classification";
 import { isDemoModeEnabled } from "./demo-mode";
 import { createId, isoNow } from "./entity-utils";
 import {
@@ -471,7 +473,10 @@ export const callMcpTool = async (
         tags: getOptionalStringArray(args.tags),
         createdAt: getOptionalString(args.createdAt) ?? undefined,
         updatedAt: getOptionalString(args.updatedAt) ?? undefined,
-      }, actor, actorLabel, bind ?? undefined));
+      }, actor, actorLabel, memoId => [
+        ...(bind?.(memoId) ?? []),
+        ...enqueueInboxClassification(c.env, auth, notebookId, memoId),
+      ]));
 
       return { memo, ...(resourceIds.length ? { resources: await listResourcesForMemo(c.env.storage.db, auth.workspaceId, memo.id) } : {}) };
     }
@@ -717,6 +722,9 @@ export const callMcpTool = async (
       const actorLabel = getActorLabel(c);
       const resourceIds = parseResourceIds(args.resourceIds) ?? [];
       const bind = await preparePendingResourceBinding(c.env.storage.db, auth, resourceIds, actor);
+      const classificationEffects = args.contentMarkdown !== undefined || args.title !== undefined || args.tags !== undefined || bind
+        ? rescheduleInboxClassification(c.env, auth, memoId)
+        : [];
       const result = await withBindingConflict(Boolean(bind), () => updateMemoRecord(
         c.env.storage.db,
         auth.workspaceId,
@@ -737,7 +745,7 @@ export const callMcpTool = async (
         actor,
         actorLabel,
         false,
-        bind ? { before: [], after: bind } : undefined,
+        bind || classificationEffects.length ? { before: [], after: (id) => [...(bind?.(id) ?? []), ...classificationEffects] } : undefined,
       ));
 
       if ("error" in result) {
@@ -790,6 +798,7 @@ export const callMcpTool = async (
         bytes,
         actor: getAuditActor(c),
         source: "mcp",
+        afterStore: rescheduleInboxClassification(c.env, auth, memoId),
       });
       const alt = getOptionalString(args.alt) ?? normalizeFilename(filename) ?? "image";
 
@@ -900,6 +909,7 @@ export const callMcpTool = async (
         mimeType: getRequiredString(args.mimeType, "mimeType"),
         bytes,
         actor: getAuditActor(c),
+        afterStore: rescheduleInboxClassification(c.env, auth, memoId),
       });
       const label = getOptionalString(args.label) ?? normalizeFilename(filename) ?? "attachment";
 
@@ -907,6 +917,11 @@ export const callMcpTool = async (
         resource,
         markdownLink: `[${escapeMarkdownLinkLabel(label)}](${resource.url})`,
       };
+    }
+    case "read_memo_attachment": {
+      assertScope(auth, "read:memos");
+      assertScope(auth, "read:resources");
+      return readMcpAttachment(c.env, auth.workspaceId, args);
     }
     case "list_memo_resources": {
       assertScope(auth, "read:resources");

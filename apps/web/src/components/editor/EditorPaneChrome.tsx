@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, useFloating } from "@floating-ui/react-dom";
-import { AudioLines, Copy, FileDown, Pencil, Trash2, X } from "lucide-react";
+import { AudioLines, Copy, FileDown, FileText, Pencil, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,6 +77,7 @@ type ResourceActionLabels = {
   download: string;
   copy: string;
   transcribe: string;
+  readText: string;
   rename: string;
   delete: string;
   unavailable: string;
@@ -91,6 +92,7 @@ export const ResourceActionMenu = ({
   onDownload,
   onCopy,
   onTranscribe,
+  onReadText,
   onRename,
   onDelete,
   onMouseEnter,
@@ -104,6 +106,7 @@ export const ResourceActionMenu = ({
   onDownload: () => void;
   onCopy: () => void;
   onTranscribe: () => void;
+  onReadText?: () => void;
   onRename: () => void;
   onDelete: () => void;
   onMouseEnter: () => void;
@@ -161,6 +164,14 @@ export const ResourceActionMenu = ({
           {labels.copy}
         </Button>
       </IconTooltip>
+      {onReadText && (
+        <IconTooltip label={labels.readText}>
+          <Button type="button" size="sm" variant="ghost" aria-label={labels.readText} onClick={onReadText}>
+            <FileText className="h-3.5 w-3.5" />
+            {labels.readText}
+          </Button>
+        </IconTooltip>
+      )}
       {canTranscribe ? (
         <IconTooltip label={labels.transcribe}>
           <Button type="button" size="sm" variant="ghost" aria-label={labels.transcribe} onClick={onTranscribe}>

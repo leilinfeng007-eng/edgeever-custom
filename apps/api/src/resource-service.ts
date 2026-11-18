@@ -15,7 +15,7 @@ import { createId, isoNow } from "./entity-utils";
 import { sha256Bytes } from "./hash-utils";
 import { resolveObjectStorage } from "./object-storage";
 import { getWorkspaceId } from "./request-auth";
-import type { DatabaseAdapter } from "./storage-contract";
+import type { DatabaseAdapter, PreparedStatementAdapter } from "./storage-contract";
 
 export const MAX_IMAGE_UPLOAD_BYTES = 100 * 1024 * 1024;
 export const MAX_ATTACHMENT_UPLOAD_BYTES = 1024 * 1024 * 1024;
@@ -197,6 +197,7 @@ export const getResourceRow = async (
   workspaceId: string,
   resourceId: string,
   includeDeleted = false,
+  activeMemoId?: string,
 ): Promise<ResourceRow | null> =>
   database
     .prepare(
@@ -204,9 +205,10 @@ export const getResourceRow = async (
               r.filename, r.byte_size, r.sha256, r.width, r.height, r.created_at, r.updated_at, r.is_deleted
        FROM resources r
        INNER JOIN memos m ON m.id = r.memo_id
-       WHERE r.id = ? AND m.workspace_id = ?${includeDeleted ? "" : " AND r.is_deleted = 0"}`,
+       WHERE r.id = ? AND m.workspace_id = ?${includeDeleted ? "" : " AND r.is_deleted = 0"}
+         ${activeMemoId === undefined ? "" : "AND r.memo_id = ? AND m.is_deleted = 0"}`,
     )
-    .bind(resourceId, workspaceId)
+    .bind(resourceId, workspaceId, ...(activeMemoId === undefined ? [] : [activeMemoId]))
     .first<ResourceRow>();
 
 export const listResourcesForMemo = async (
@@ -271,6 +273,7 @@ type ResourceCreateInput = {
   bytes: Uint8Array;
   actor: AuditActor;
   metadata?: Record<string, unknown>;
+  afterStore?: PreparedStatementAdapter[];
   /**
    * The note's workspace. Required on routes without a signed-in user, such
    * as public table forms; otherwise the caller's workspace is used.
@@ -345,6 +348,7 @@ const storeResource = async (
         resourceId,
         { memoId: input.memoId, mimeType: input.mimeType, byteSize: input.bytes.byteLength, ...input.auditMetadata },
       ),
+      ...(input.afterStore ?? []),
     ]);
   } catch (error) {
     await destination.store.delete(objectKey);

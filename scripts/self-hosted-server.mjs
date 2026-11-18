@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { hasBootstrapCredential } from "../apps/api/src/auth-bootstrap.ts";
 import { isUnauthenticatedAccessEnabled } from "../apps/api/src/auth-state.ts";
 import { isEdgeEverAppPath } from "../apps/api/src/app-paths.ts";
+import { startInboxClassification } from "../apps/api/src/inbox-classification.ts";
 import { fetchEdgeEverApp } from "../apps/api/src/index.ts";
 import { isNotebookSitePagePath, renderNotebookSitePage } from "../apps/api/src/notebook-site-page.ts";
 import { isPublicMemoSharePagePath, renderPublicMemoSharePage } from "../apps/api/src/share-page.ts";
@@ -87,6 +88,7 @@ const env = {
   publicNetworkFetch: nodePublicFetch,
   EDGE_EVER_AUTH_USERNAME: runtimeEnvironment.EDGE_EVER_AUTH_USERNAME ?? "admin",
   EDGE_EVER_RUNTIME: "self-hosted-bun",
+  EDGE_EVER_AUTO_CLASSIFY_WORKSPACE: runtimeEnvironment.EDGE_EVER_AUTO_CLASSIFY_WORKSPACE,
   EDGE_EVER_CONTAINER_IMAGE: runtimeEnvironment.EDGE_EVER_CONTAINER_IMAGE,
   EDGE_EVER_DEPLOYMENT_TRIGGER: runtimeEnvironment.EDGE_EVER_DEPLOYMENT_TRIGGER,
   EDGE_EVER_DEPLOYMENT_METHOD: runtimeEnvironment.EDGE_EVER_DEPLOYMENT_METHOD,
@@ -139,6 +141,8 @@ const server = Bun.serve({
   },
 });
 
+const stopInboxClassification = startInboxClassification(env);
+
 console.log(`[self-hosted] listening on ${server.url}`);
 console.log(`[self-hosted] data directory: ${dataDirectory}`);
 console.log(`[self-hosted] storage backend: ${config.storageBackend}`);
@@ -151,6 +155,7 @@ const shutdown = async (signal) => {
   console.log(`[self-hosted] received ${signal}; shutting down`);
 
   try {
+    await stopInboxClassification?.();
     await server.stop();
     sqlite.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     sqlite.close();

@@ -1,3 +1,4 @@
+import { AttachmentTextDialog, type AttachmentTextTarget } from "./editor/AttachmentTextDialog";
 import { autoUpdate } from "@floating-ui/react-dom";
 import { AI_ASSISTANT_LAUNCHER_POSITION } from "@/lib/ai-assistant-launcher";
 import { editorClipboardTextSerializer } from "@/lib/editor-clipboard";
@@ -4104,10 +4105,12 @@ const RichEditorPane = ({
     });
   };
 
+  const [attachmentTextTarget, setAttachmentTextTarget] = useState<AttachmentTextTarget | null>(null);
   const resourceMenuLabels = {
     download: t("editor.resourceActions.download"),
     copy: t("editor.resourceActions.copy"),
     transcribe: t("editor.resourceActions.transcribe"),
+    readText: t("attachmentText.action"),
     rename: t("editor.resourceActions.rename"),
     delete: t("editor.resourceActions.delete"),
     unavailable: t("editor.resourceActions.unavailable"),
@@ -5023,6 +5026,10 @@ const RichEditorPane = ({
         onClose={() => setImagePreview(null)}
       />
 
+      {attachmentTextTarget && attachmentTextTarget.memoId === memo?.id && (
+        <AttachmentTextDialog target={attachmentTextTarget} onClose={() => setAttachmentTextTarget(null)} />
+      )}
+
       {resourceMenuTarget && (
         <ResourceActionMenu
           target={resourceMenuTarget}
@@ -5050,6 +5057,13 @@ const RichEditorPane = ({
           onDownload={() => void handleResourceDownload(resourceMenuTarget)}
           onCopy={() => handleResourceCopy(resourceMenuTarget)}
           onTranscribe={() => void handleResourceTranscribe(resourceMenuTarget)}
+          onReadText={memo && !isLocalMemoId(memo.id) && resourceMenuTarget.kind === "attachment" &&
+            resourceMenuTarget.resourceId?.startsWith("res_") &&
+            /\.(docx|txt|md|csv|tsv|json)$/i.test(resourceMenuTarget.filename) ? () => {
+              setAttachmentTextTarget({ memoId: memo.id, resourceId: resourceMenuTarget.resourceId!,
+                filename: resourceMenuTarget.filename });
+              hideResourceMenu();
+            } : undefined}
           onRename={() => openResourceDialog("rename", resourceMenuTarget)}
           onDelete={() => openResourceDialog("delete", resourceMenuTarget)}
           onMouseEnter={cancelResourceMenuHide}

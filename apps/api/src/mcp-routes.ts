@@ -13,6 +13,7 @@ import {
 } from "./mcp-json-rpc";
 import { MCP_TOOLS } from "./mcp-tools";
 import { posterToolImage } from "./poster-tool-output";
+import { formatMcpAttachment } from "./mcp-attachment";
 
 const MODERN_MCP_PROTOCOL_VERSION = "2026-07-28" as const;
 const LEGACY_MCP_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"] as const;
@@ -256,12 +257,15 @@ export const handleMcpMessage = async (
     try {
       const result = await dependencies.callTool(context, auth, name, asRecord(params.arguments));
       const visual = posterToolImage(name, result);
+      const attachment = formatMcpAttachment(name, result);
+      const metadata = attachment?.metadata ?? visual?.metadata ?? result;
       const toolResult = {
         content: [
-          { type: "text", text: JSON.stringify(visual?.metadata ?? result, null, 2) },
+          { type: "text", text: JSON.stringify(metadata, null, 2) },
           ...(visual ? [{ type: "image", ...visual.image }] : []),
+          ...(attachment ? [attachment.contentBlock] : []),
         ],
-        structuredContent: visual?.metadata ?? result,
+        structuredContent: metadata,
         isError: false,
       };
       return {

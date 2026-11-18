@@ -742,6 +742,21 @@ const MCP_TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "read_memo_attachment",
+    description: "Read a file from an active memo directly through MCP. Get resourceId from list_memo_resources. Default content mode returns image data or extracts text from DOCX and UTF-8 text attachments. For text, pass nextOffset as offset to read the next part. Use mode=original to receive an embedded original file, including PDF or Excel, up to 2 MiB. Requires read:memos and read:resources.",
+    inputSchema: {
+      type: "object",
+      required: ["memoId", "resourceId"],
+      additionalProperties: false,
+      properties: {
+        memoId: { type: "string" },
+        resourceId: { type: "string" },
+        mode: { type: "string", enum: ["content", "original"] },
+        offset: { type: "integer", minimum: 0 },
+      },
+    },
+  },
+  {
     name: "list_memo_resources",
     description: "List active resources attached to a memo.",
     inputSchema: {
@@ -1093,6 +1108,7 @@ const READ_ONLY_MCP_TOOLS = new Set([
   "get_poster_preview",
   "export_poster",
   "list_memo_resources",
+  "read_memo_attachment",
   "list_resources",
   "list_memo_revisions",
   "get_notebook",
