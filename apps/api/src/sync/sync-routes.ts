@@ -1,3 +1,6 @@
+/**
+ * 跨端增量同步入口：提供引导与变更分页；游标和累计读取预算是兼容边界。
+ */
 import type { MemoDetail } from "@edgeever/shared";
 import type { Hono } from "hono";
 import type { AppEnv } from "../api-context";

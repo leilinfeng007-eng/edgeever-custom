@@ -40,6 +40,8 @@ function cleanTags(tags: string[]) {
     .slice(0, 3);
 }
 
+// 模型输出视为不可信数据：拒绝截断、空文本、无效 JSON 和越界目的地，再用 Zod 校验字段。
+// 兼容格式只在 fallback 时接受；明确的 choice=0 表示没有目的地，不能误当第一个笔记本。
 function parseResponse(text: string, finishReason: string, size: number, compatibility: boolean) {
   const response = text.trim().replace(/^<think>[\s\S]*?<\/think>\s*/i, "");
   if (finishReason === "length") throw new AppError("model_truncated", "Classifier response reached the output limit.", 422);
@@ -105,6 +107,8 @@ export const classifyWithDefaultModel = (env: Bindings) => async ({
       });
       decision = parseResponse(result.text, result.finishReason, destinations.length, false);
     }
+  // SDK 自动重试已关闭；仅结构化输出错误或供应商 400/422 才补一次兼容请求。
+  // 超时、鉴权或网络异常不会走此分支；每次请求 30 秒，外层任务的 65 秒信号仍可终止 fallback。
   } catch (error) {
     if (signal.aborted) throw error;
     const outputError = error instanceof Error && ["AI_NoObjectGeneratedError", "AI_NoOutputGeneratedError"].includes(error.name);

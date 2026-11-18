@@ -1,3 +1,6 @@
+/**
+ * 工作区初始化入口：为用户创建/查找个人工作区并准备默认内容，避免不同用户共享业务数据。
+ */
 import {
   DEFAULT_AI_PROMPT_SEEDS,
   defaultAiPromptId,

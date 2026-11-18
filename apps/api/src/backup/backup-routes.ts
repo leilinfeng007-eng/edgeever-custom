@@ -1,3 +1,6 @@
+/**
+ * 备份/恢复 REST 入口：权限和请求处理在路由，导出游标与恢复提交在 backup-service。
+ */
 import {
   emptyDoc,
   JsonBackupResourceMetadataSchema,

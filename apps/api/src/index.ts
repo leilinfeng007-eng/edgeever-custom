@@ -1,3 +1,7 @@
+/**
+ * API 组合入口：注册 Hono 中间件、REST 与 /mcp，统一注入工作区身份和存储。
+ * Worker 默认导出和自托管 fetchEdgeEverApp 共用业务应用；模块迁移不要改变注册顺序。
+ */
 import { servePublicDemoRequest } from "./workspace/public-demo-page";
 import { isEdgeEverAppPath } from "./app-paths";
 import { isDatabaseDailyQuotaError } from "./storage/database-errors";

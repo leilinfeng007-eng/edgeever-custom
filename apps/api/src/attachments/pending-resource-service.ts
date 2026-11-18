@@ -542,6 +542,8 @@ export const parseResourceIds = (value: unknown): string[] | undefined => {
  * and its resources commit together or not at all; on failure the files stay
  * pending and can be bound by a retry.
  */
+// 顺序是申请 URL → 成功上传 → 随笔记写入绑定；这里返回 SQL，绝不能提前单独提交。
+// 预查与真正提交之间仍可能并发，INSERT 的约束用于让整批回滚；失败后仅对仍 pending 的文件重试绑定。
 export const preparePendingResourceBinding = async (
   db: DatabaseAdapter,
   auth: AuthContext,

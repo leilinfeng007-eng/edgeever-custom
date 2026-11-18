@@ -410,6 +410,8 @@ const completeRestoredResourceUpload = async (
   return mapResource(resource);
 };
 
+// 先验证分片序号/长度，再完成对象，最后提交资源元数据并删除上传会话。
+// DB 失败会清理对象；完成调用不承诺可无条件重放，重试前应检查会话/资源状态，不能重复完成已消费会话。
 export const completeResourceUpload = async (
   context: AppContext,
   uploadId: string,

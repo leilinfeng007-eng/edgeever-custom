@@ -1,3 +1,7 @@
+/**
+ * HTTP 与 MCP 共用的附件内容读取：验证工作区/笔记绑定、限制对象读取并提取 Word/UTF-8 文本。
+ * 只返回内部数据；MCP image/resource 内容块由 mcp/mcp-attachment 组装。
+ */
 import { Uint8ArrayReader, ZipReader } from "@zip.js/zip.js/index-native.js";
 import { XMLParser } from "fast-xml-parser";
 import type { Bindings } from "../api-context";
@@ -72,6 +76,8 @@ function extractWordText(nodes: WordNode[]): string {
   return parts.join("").trim();
 }
 
+// 只提取主文档正文；不读取页眉页脚、嵌入图片或旧 .doc，不保留排版，也不做 OCR。
+// 压缩大小与 XML 解压大小分别限制；流式累计再次检查，避免仅信任 ZIP 目录中的大小。
 async function readDocxText(bytes: Uint8Array) {
   const reader = new ZipReader(new Uint8ArrayReader(bytes), { useWebWorkers: false, checkCrc32: true });
   try {
@@ -154,6 +160,8 @@ export async function readAttachmentContent(env: Bindings, workspaceId: string, 
   }
   if (offset > text.length) throw new AppError("invalid_params", "offset is beyond the end of the attachment.", 400);
   let end = Math.min(text.length, offset + PAGE_CHARACTERS);
+  // offset 与 nextOffset 使用 JS UTF-16 索引；缩短页尾可避免将一个代理对拆到两页。
+  // 调用方续读应直接使用 nextOffset，不要按 UTF-8 字节数或码点数重新计算。
   if (end < text.length && /[\uDC00-\uDFFF]/u.test(text[end]!)) end--;
   return {
     attachment, format: "text" as const, nextOffset: end < text.length ? end : null, totalCharacters: text.length,

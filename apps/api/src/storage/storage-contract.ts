@@ -1,4 +1,8 @@
 /**
+ * 跨运行时存储边界：数据库预编译语句/batch 与 Blob 存储的共同契约。
+ * Cloudflare 和自托管适配器实现该契约；工作区权限与业务规则仍留在业务服务。
+ */
+/**
  * Platform-neutral storage seams used by the API layer.
  *
  * These contracts describe only the operations consumed by application code.

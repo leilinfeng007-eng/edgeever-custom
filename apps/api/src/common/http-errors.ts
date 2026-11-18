@@ -1,3 +1,6 @@
+/**
+ * 共用 HTTP 错误转换：保持业务错误码/状态与统一响应结构，供各模块路由使用。
+ */
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 

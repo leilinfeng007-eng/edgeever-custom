@@ -1,3 +1,7 @@
+/**
+ * 已绑定附件 REST 入口：上传、读取、内容替换与恢复；底层对象通过存储契约访问。
+ * 先上传后绑定的临时资源走 pending-resource-routes，文本提取走 attachment-content-routes。
+ */
 import { resolveResourceUploadMimeType, ResourceUpdateSchema, type MemoDetail, type Resource } from "@edgeever/shared";
 import { zValidator } from "@hono/zod-validator";
 import type { Context, Hono } from "hono";

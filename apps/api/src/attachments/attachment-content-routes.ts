@@ -1,3 +1,7 @@
+/**
+ * 附件文本 HTTP 入口：与 MCP 共用内容提取和读取上限，只对文本结果返回分页 JSON。
+ * 图片或不支持的格式不会静默转成下载或 OCR，沿用 422 错误。
+ */
 import type { Hono } from "hono";
 import type { AppEnv } from "../api-context";
 import { AppError } from "../common/app-error";

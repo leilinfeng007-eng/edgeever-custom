@@ -1,3 +1,6 @@
+/**
+ * 笔记本 REST 入口：目录树读写交给 notebook-service，收件箱身份与层级规则集中在服务中。
+ */
 import { NotebookCreateSchema, NotebookUpdateSchema } from "@edgeever/shared";
 import { zValidator } from "@hono/zod-validator";
 import type { Hono } from "hono";

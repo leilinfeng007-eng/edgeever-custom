@@ -1,3 +1,7 @@
+/**
+ * 客户端 AI 文本生成：供应商 SDK 禁用自动重试，取消/超时依赖调用方传入的 signal。
+ * 普通文本原样返回（可为空）；标签由专用解析器校验，发现建议由共享 Zod schema 校验，不能混用。
+ */
 import type { AiPreparedTagSuggestions, AiPreparedTextGeneration, CompanionDiscoveryItem, CompanionPreparedDiscovery } from "@edgeever/shared";
 import { finalizeAiTagSuggestions, parseAiTagSuggestionNames } from "@edgeever/shared";
 import { createClientAiModel } from "./ai-model";

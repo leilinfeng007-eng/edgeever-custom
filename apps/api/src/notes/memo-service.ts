@@ -1,3 +1,7 @@
+/**
+ * 笔记业务写入入口：统一维护多种正文表示、标签、修订、资源关联及审计。
+ * REST、MCP、助手与导入共用；涉及批量提交的附加 SQL 必须留在同一个事务 batch。
+ */
 import { hasPosterDocumentMarker, parsePosterDocument } from "@edgeever/shared";
 import {
   createExcerpt,
@@ -1242,6 +1246,8 @@ export const updateMemoRecord = async (
     return { error: "not_found", message: "Memo not found" };
   }
 
+  // 版本号保护整个笔记状态；内容哈希和编辑会话保护正文绑定，彼此不能替代。
+  // 并非所有入口强制编辑会话；requireEditSession 由调用方选择。冲突返回后应重读并协调修改。
   if (input.expectedRevision !== undefined && input.expectedRevision !== current.revision) {
     return {
       error: "revision_conflict",

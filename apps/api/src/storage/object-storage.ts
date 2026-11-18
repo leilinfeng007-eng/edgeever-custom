@@ -1,3 +1,7 @@
+/**
+ * 对象存储选择入口：按配置解析内置或 S3 存储，并保留历史资源所属配置。
+ * 不要用当前默认存储直接读取旧附件，旧记录必须按 storage_config_id 定位。
+ */
 import type { ObjectStorageSettings } from "@edgeever/shared";
 import { AppError } from "../common/app-error";
 import { decryptSecret, encryptSecret } from "../auth/secret-encryption";

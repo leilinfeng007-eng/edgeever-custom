@@ -1,3 +1,7 @@
+/**
+ * 本地自定义收件箱归档：仅指定自托管工作区启用，按任务租约调用模型并检查源笔记版本。
+ * 从 self-hosted-server 启动；模型建议不能跳过笔记服务的工作区隔离或并发校验。
+ */
 import { normalizeTags, type MemoDetail } from "@edgeever/shared";
 import { z } from "zod";
 import type { AuthContext, Bindings } from "../api-context";
@@ -195,6 +199,8 @@ export async function processInboxClassification(
     console.info(`[inbox-classification] ${memo.id} moved ${destination.id}`);
   } catch (error) {
     if (signal.aborted) return;
+    // 输出错误/未配置/鉴权失败保留收件箱，不反复请求；429、暂时异常按最多三次任务尝试重排。
+    // 等待模型时笔记变化也会重排；持久化使用 claim_token，过期工作者不得覆盖新租约结果。
     if (error instanceof AppError && error.code === "ai_not_configured") return await finish("model_not_configured");
     if (error instanceof AppError && isModelOutputError(error.code)) return await finish(error.code);
     if (error instanceof Error && error.message.includes("status IN ('pending', 'running', 'moved', 'retained')")) {

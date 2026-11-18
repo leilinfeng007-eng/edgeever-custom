@@ -1,3 +1,7 @@
+/**
+ * AI API 入口：管理供应商、模型、预算，准备客户端生成所需上下文与凭据。
+ * 生产推理优先在 packages/client 直连；浏览器兜底转发见 ai-provider-relay。
+ */
 const OLD_AI_GENERATION_PATHS = ["/api/v1/ai/generate", "/api/v1/ai/infographic-agent", "/api/v1/ai/providers/:providerConfigId/discover-models", "/api/v1/ai/providers/:providerConfigId/test", "/api/v1/ai/tag-suggestions", "/api/v1/ai/video-outline"];
 import {
   AiDefaultModelUpdateSchema,

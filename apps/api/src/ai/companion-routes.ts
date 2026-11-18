@@ -1,3 +1,7 @@
+/**
+ * AI 助手 API：准备回合、持久化检查点、处理工具执行和完成状态。
+ * 生产模型流由客户端消费；服务端校验回传 schema、所属用户和回合状态后才能落库。
+ */
 import { AiAttachmentSchema, CompanionDiscoveryCompleteSchema, CompanionDiscoverySettingsInputSchema, CompanionIdSchema, CompanionMemoryImportSchema, CompanionMemoryInputSchema, CompanionMemoryUpdateSchema,
   CompanionToolExecuteSchema, CompanionTurnCheckpointSchema, CompanionTurnCompleteSchema,
   CompanionTurnInputSchema, CompanionTurnResumeSchema, companionTurnLocale, type CompanionSource, type CompanionToolCall } from "@edgeever/shared";

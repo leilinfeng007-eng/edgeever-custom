@@ -1,3 +1,7 @@
+/**
+ * MCP HTTP 入口：协议协商、工具发现、认证与 JSON-RPC 响应封装。
+ * 实际工具通过注入的 callTool 执行；路径 /mcp 和新旧协议的响应差异属于兼容边界。
+ */
 import type { Hono } from "hono";
 import packageMetadata from "../../../../package.json";
 import type { AppContext, AppEnv, AuthContext } from "../api-context";
@@ -259,6 +263,8 @@ export const handleMcpMessage = async (
       const visual = posterToolImage(name, result);
       const attachment = formatMcpAttachment(name, result);
       const metadata = attachment?.metadata ?? visual?.metadata ?? result;
+      // 普通工具将返回对象同时放入 JSON 文本与 structuredContent；附件/海报另附 image 或 resource。
+      // 只有元数据进入 structuredContent，避免把大段图片/原文件 base64 再复制到 JSON 文本中。
       const toolResult = {
         content: [
           { type: "text", text: JSON.stringify(metadata, null, 2) },
@@ -273,6 +279,8 @@ export const handleMcpMessage = async (
         status: 200,
       };
     } catch (error) {
+      // 执行失败仍是 HTTP 200 的工具结果，isError 和 structuredContent.error 才是业务失败信号。
+      // 协议/认证失败在调用前单独返回 JSON-RPC error，客户端不能只按 HTTP 状态判断成功。
       const mapped = mapMcpToolError(error);
       const toolResult = {
         content: [{ type: "text", text: mapped.message }],

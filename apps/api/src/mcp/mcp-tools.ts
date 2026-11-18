@@ -1,3 +1,7 @@
+/**
+ * MCP 公开工具目录：集中声明工具名、输入 schema、说明与能力标记。
+ * 返回内容和错误封装见 mcp-routes；执行校验与工作区权限见 mcp-tool-service，不能仅依赖发现 schema。
+ */
 import { posterPatchInputSchema, posterOperationsInputSchema } from "./mcp-poster-schema";
 import { ARCHITECTURE_RESOURCE_ICONS, INFOGRAPHIC_NOTE_TEMPLATES, POSTER_FORMATS, POSTER_TEMPLATES, POSTER_TEMPLATE_SELECTION_INSTRUCTION, TABLE_FIELD_TYPES } from "@edgeever/shared";
 

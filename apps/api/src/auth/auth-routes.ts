@@ -1,3 +1,7 @@
+/**
+ * 认证 REST 入口：登录、会话和退出由 auth-service 协调；令牌与 TOTP 各自注册。
+ * 模块搬迁只改变引用，不改变 cookie、密钥派生、令牌作用域或历史会话兼容规则。
+ */
 import {
   ChangePasswordSchema,
   LoginDeviceSessionUpdateSchema,

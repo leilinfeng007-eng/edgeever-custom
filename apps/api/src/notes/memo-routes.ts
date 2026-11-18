@@ -1,3 +1,7 @@
+/**
+ * 笔记 REST 入口：接收 schema 校验后的请求，交给 memo-service 维护正文、修订与审计。
+ * MCP 也调用同一服务；接口层决定编辑会话要求，不应在搬迁时放宽校验。
+ */
 import {
   DeleteMemosSchema,
   DuplicateMemoSchema,

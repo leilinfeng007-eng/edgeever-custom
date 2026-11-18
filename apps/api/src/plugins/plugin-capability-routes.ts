@@ -1,3 +1,6 @@
+/**
+ * 插件能力 API 入口：按请求身份暴露受限工作区能力；插件分发与社区代理另行注册。
+ */
 import { PluginAiGenerateSchema, PluginPublicFetchSchema, type PluginAiGenerateRequest, type PluginAiStatus } from '@edgeever/shared';
 import { zValidator } from '@hono/zod-validator';
 import { bodyLimit } from 'hono/body-limit';

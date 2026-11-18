@@ -1,3 +1,7 @@
+/**
+ * AI 配置与准备服务：解析默认模型、解密凭据、组装提示词和生成边界。
+ * 通用输出清洗/校验复用 packages/shared；供应商调用与流式消费主要在 packages/client。
+ */
 import type {
   AiAction,
   AiAttachmentInput,

@@ -1,3 +1,7 @@
+/**
+ * 工作区工具执行层：按工具名校验参数/权限并调用业务服务；远程 MCP 与内置助手共用。
+ * 输入契约见 mcp-tools；返回对象交给协议层封装，AppError 保留业务错误码，未知工具不执行。
+ */
 import { requestPosterRender, readPosterRenderJob, posterRenderJob } from "../notes/poster-render-service";
 import { applyPosterEdits, compilePosterMemo, posterCapabilities } from "./mcp-poster-tools";
 import { resolveObjectStorage } from "../storage/object-storage";
@@ -274,6 +278,7 @@ export const callMcpTool = async (
     case "get_current_user": {
       return await getCurrentWorkspaceIdentity(c.env.storage.db, auth);
     }
+    // 输入为筛选条件，返回 { memos } 摘要，最多 50 条；正文细节应另调 get_memo，不把片段当完整正文。
     case "search_memos": {
       assertScope(auth, "read:memos");
       return {
@@ -459,6 +464,7 @@ export const callMcpTool = async (
         ...(name === "delete_table_record" ? { deleted: true } : { record: next.records.find((item) => item.id === recordId) }),
       };
     }
+    // 输入 notebookId、可选正文/标签/resourceIds；返回 { memo, resources? }。先校验 pending，再随笔记原子绑定，失败不消耗文件。
     case "create_memo": {
       assertScope(auth, "write:memos");
       const notebookId = getRequiredString(args.notebookId, "notebookId");
@@ -480,6 +486,7 @@ export const callMcpTool = async (
 
       return { memo, ...(resourceIds.length ? { resources: await listResourcesForMemo(c.env.storage.db, auth.workspaceId, memo.id) } : {}) };
     }
+    // 返回上传 URL、方法、headers 与过期时间；只创建上传资格，不等于文件上传或笔记绑定成功。
     case "create_resource_upload_url": {
       assertScope(auth, "write:resources");
       const kind = getRequiredString(args.kind, "kind");
@@ -688,6 +695,7 @@ export const callMcpTool = async (
         actorLabel: getActorLabel(c),
       });
     }
+    // 普通笔记写入返回 { memo, resources? }；结构化笔记须用专用工具，版本/编辑会话冲突不能靠盲重试覆盖。
     case "update_memo": {
       assertScope(auth, "write:memos");
       const memoId = getRequiredString(args.memoId, "memoId");
@@ -918,6 +926,7 @@ export const callMcpTool = async (
         markdownLink: `[${escapeMarkdownLinkLabel(label)}](${resource.url})`,
       };
     }
+    // 同时要求 read:memos 与 read:resources；memoId/resourceId 定位已绑定附件，格式和分页规则见 mcp-attachment。
     case "read_memo_attachment": {
       assertScope(auth, "read:memos");
       assertScope(auth, "read:resources");

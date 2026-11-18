@@ -1,3 +1,6 @@
+/**
+ * 计划任务 API 入口：管理任务定义、运行状态与计数；实际执行由对应客户端调度。
+ */
 import {
   ScheduledTaskClaimSchema,
   ScheduledTaskCreateSchema,

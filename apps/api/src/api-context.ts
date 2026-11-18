@@ -1,3 +1,7 @@
+/**
+ * API 共用上下文：集中定义运行时 bindings、认证身份与审计主体。
+ * 业务模块依赖 storage 契约，不直接依赖某个平台的数据库对象。
+ */
 import type { Context } from "hono";
 import type { CloudflareStorageBindings } from "./storage/cloudflare-storage-adapter";
 import type { StorageAdapter } from "./storage/storage-contract";

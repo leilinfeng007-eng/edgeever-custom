@@ -398,6 +398,8 @@ export const createAttachmentResource = async (
   });
 };
 
+// 外部编辑回存用 expectedContentHash 做比较后写入；先写新对象再条件更新指针，避免破坏旧字节。
+// DB 响应失败不代表写入失败，指针可能已经生效；清理候选对象前必须确认未被引用，冲突应重读。
 export const replaceResourceContent = async (
   context: AppContext,
   input: {

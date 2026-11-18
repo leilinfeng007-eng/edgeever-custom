@@ -70,6 +70,8 @@ export const registerAiProviderRelay = (app: Hono<AppEnv>, fetchProvider: typeof
         method, headers, redirect: "manual", signal: c.req.raw.signal,
         ...(method === "POST" ? { body: c.req.raw.body, duplex: "half" } : {}),
       };
+      // 这里只转发一次并保留上游状态/响应流，不校验或修复模型正文，也不因流中断再次调用。
+      // 请求使用客户端取消信号，无独立超时；超时策略由生成调用方控制，重定向一律拒绝。
       const upstream = await fetchProvider(target, requestInit);
       if (upstream.status >= 300 && upstream.status < 400) {
         await upstream.body?.cancel();
