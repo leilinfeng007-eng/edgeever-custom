@@ -846,10 +846,10 @@ describe("Cloudflare deployment entrypoints", () => {
   }, 20_000);
 
   test("public deployment documentation exposes only Fork and Agent paths", () => {
-    const englishReadme = readRepositoryFile("README.md");
-    const chineseReadme = readRepositoryFile("README.zh-CN.md");
-    const traditionalChineseReadme = readRepositoryFile("README.zh-TW.md");
-    const japaneseReadme = readRepositoryFile("README.ja.md");
+    const englishReadme = readRepositoryFile("docs/readme/README.md");
+    const chineseReadme = readRepositoryFile("docs/readme/README.zh-CN.md");
+    const traditionalChineseReadme = readRepositoryFile("docs/readme/README.zh-TW.md");
+    const japaneseReadme = readRepositoryFile("docs/readme/README.ja.md");
 
     expect(englishReadme).not.toContain("deploy.workers.cloudflare.com");
     expect(englishReadme).not.toContain("Option C: Manual Deployment");
@@ -866,8 +866,8 @@ describe("Cloudflare deployment entrypoints", () => {
   });
 
   test("product site deployment prompts mirror the root READMEs", () => {
-    const englishReadme = readRepositoryFile("README.md");
-    const chineseReadme = readRepositoryFile("README.zh-CN.md");
+    const englishReadme = readRepositoryFile("docs/readme/README.md");
+    const chineseReadme = readRepositoryFile("docs/readme/README.zh-CN.md");
     const siteDeploymentComponent = readRepositoryFile(
       "apps/site/src/components/agent-install-tabs.astro",
     );

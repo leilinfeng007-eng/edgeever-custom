@@ -1,6 +1,8 @@
+[Project entry](../../README.md) · [Source map](../source-map.md)
+
 <div align="center">
   <h1>
-    <img src="assets/brand/edgeever-icon.svg" alt="Logo de EdgeEver" width="48" align="absmiddle" /> EdgeEver
+    <img src="../../assets/brand/edgeever-icon.svg" alt="Logo de EdgeEver" width="48" align="absmiddle" /> EdgeEver
   </h1>
   <p>
     <b>Base de conocimiento nativa de IA y alternativa a Evernote/Obsidian. Sincronización instantánea en todas las plataformas, notas enriquecidas (tablas, mapas mentales, diagramas, pósteres), web clipper y MCP. 100% gratis en Cloudflare o con Docker.</b>
@@ -18,15 +20,15 @@
     <a href="README.zh-CN.md">简体中文</a> | <a href="README.zh-TW.md">繁體中文</a> | <a href="README.md">English</a> | <b>Español</b> | <a href="README.de.md">Deutsch</a> | <a href="README.fr.md">Français</a> | <a href="README.ja.md">日本語</a> | <a href="README.pl-PL.md">Polski</a> | <a href="README.ru.md">Русский</a>
   </p>
   <p>
-    <a href="https://t.me/+GvKYnL37feUwOTNl"><img src="assets/readme/community/telegram.svg" alt="Telegram" width="16" height="16" align="absmiddle" /> Grupo de Telegram</a> &nbsp;|&nbsp;
+    <a href="https://t.me/+GvKYnL37feUwOTNl"><img src="../../assets/readme/community/telegram.svg" alt="Telegram" width="16" height="16" align="absmiddle" /> Grupo de Telegram</a> &nbsp;|&nbsp;
     <a href="https://demo.edgeever.org">🌐 Demostración en vivo</a> &nbsp;|&nbsp;
     <a href="https://github.com/users/tianma-if/projects/1">🗺️ Hoja de ruta</a> &nbsp;|&nbsp;
     <a href="#clientes-y-extensiones">📱 Clientes y extensiones</a> &nbsp;|&nbsp;
     <a href="#features">Matriz de funciones y capacidades</a> &nbsp;|&nbsp;
-    <a href="docs/note-migration-guide.en-US.md">📥 Migración de notas</a>
+    <a href="../note-migration-guide.en-US.md">📥 Migración de notas</a>
   </p>
   <p align="center">
-    <img src="assets/readme/edgeever-hero-v8-en.png" alt="Vista previa del espacio de trabajo de EdgeEver" width="800" />
+    <img src="../../assets/readme/edgeever-hero-v8-en.png" alt="Vista previa del espacio de trabajo de EdgeEver" width="800" />
   </p>
 </div>
 
@@ -62,11 +64,11 @@ La demostración pública se restablece todos los días a las 3:00 AM (hora est�
 ### Descargas de clientes
 
 <p>
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/macos.svg" alt="Descargar EdgeEver para macOS" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/windows.svg" alt="Descargar EdgeEver para Windows" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/tux.svg" alt="Descargar la vista previa de EdgeEver AppImage para Linux x86_64" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile&hl=es"><img src="assets/readme/platforms/google-play.svg" alt="Descargar EdgeEver para Android desde Google Play" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://apps.apple.com/es/app/edgeever/id6792625631"><img src="assets/readme/platforms/app-store.svg" alt="Descargar EdgeEver para iOS desde App Store" width="40" height="40" /></a>
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/macos.svg" alt="Descargar EdgeEver para macOS" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/windows.svg" alt="Descargar EdgeEver para Windows" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/tux.svg" alt="Descargar la vista previa de EdgeEver AppImage para Linux x86_64" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile&hl=es"><img src="../../assets/readme/platforms/google-play.svg" alt="Descargar EdgeEver para Android desde Google Play" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://apps.apple.com/es/app/edgeever/id6792625631"><img src="../../assets/readme/platforms/app-store.svg" alt="Descargar EdgeEver para iOS desde App Store" width="40" height="40" /></a>
 </p>
 
 > La aplicación para iOS requiere un Apple ID registrado fuera de China continental.
@@ -85,7 +87,7 @@ La demostración pública se restablece todos los días a las 3:00 AM (hora est�
 <a id="features"></a>
 ## Matriz de funciones y capacidades
 
-Un espacio de trabajo integral que conecta la captura de inspiración, la creación profunda y la consolidación del conocimiento (👉 **[Explora 20 casos prácticos paso a paso con capturas de pantalla](docs/best-practices.md)**):
+Un espacio de trabajo integral que conecta la captura de inspiración, la creación profunda y la consolidación del conocimiento (👉 **[Explora 20 casos prácticos paso a paso con capturas de pantalla](../best-practices.md)**):
 
 | Módulo | Funciones principales | Funciones avanzadas |
 | :--- | :--- | :--- |
@@ -121,7 +123,7 @@ Despliega EdgeEver íntegramente a través de GitHub y Cloudflare:
    Este flujo de trabajo sincronizará automáticamente futuras versiones estables y correcciones.
 ```
 
-> Requisitos detallados: [Despliegue en Cloudflare con agente de IA](docs/agent-deploy-cloudflare.md).
+> Requisitos detallados: [Despliegue en Cloudflare con agente de IA](../agent-deploy-cloudflare.md).
 
 ### Opción B: Despliegue manual en línea
 
@@ -138,7 +140,7 @@ Completa los siguientes 7 pasos en la web estrictamente en orden:
 6. **Configurar permisos de despliegue**: En Settings → Builds → API token de este Worker, selecciona o crea el token de API de Cloudflare utilizado para el despliegue, con permisos de lectura/edición de D1 para la cuenta de destino.
 7. **Compilar y verificar**: En el repositorio de GitHub del Fork, abre Actions → Update deployed EdgeEver, activa el flujo de trabajo si se te solicita y selecciona Run workflow en `main`. Tras confirmar en Cloudflare que la compilación correspondiente tuvo éxito y el despliegue finalizó, comprueba que `/api/health` devuelva `200` y verifica el inicio de sesión. Este flujo de trabajo sincronizará automáticamente futuras versiones estables y correcciones.
 
-> 📖 Para consultar las instrucciones completas paso a paso y los detalles de configuración, consulta la [Guía de despliegue en línea](docs/deploy-cloudflare-button.md).
+> 📖 Para consultar las instrucciones completas paso a paso y los detalles de configuración, consulta la [Guía de despliegue en línea](../deploy-cloudflare-button.md).
 
 </details>
 
@@ -153,7 +155,7 @@ Completa los siguientes 7 pasos en la web estrictamente en orden:
 
 ### Opción C: Docker en un VPS o NAS
 
-Docker ejecuta la misma interfaz, rutas de API, servicios, autenticación, implementación de MCP y migraciones que Cloudflare. El contenedor utiliza SQLite con archivos locales o almacenamiento de adjuntos compatible con S3, y es compatible con `amd64` y `arm64`. Consulta [Desplegar EdgeEver con Docker](docs/deploy-docker.md) y [Arquitectura de autoalojamiento y Docker](docs/self-hosting-architecture.md).
+Docker ejecuta la misma interfaz, rutas de API, servicios, autenticación, implementación de MCP y migraciones que Cloudflare. El contenedor utiliza SQLite con archivos locales o almacenamiento de adjuntos compatible con S3, y es compatible con `amd64` y `arm64`. Consulta [Desplegar EdgeEver con Docker](../deploy-docker.md) y [Arquitectura de autoalojamiento y Docker](../self-hosting-architecture.md).
 
 Utiliza el instalador alojado en GitHub y la imagen oficial de GHCR:
 
@@ -163,7 +165,7 @@ curl -fsSL https://edgeever.org/install.sh | bash
 
 El comando descarga la imagen más reciente, genera una contraseña de administrador e inicia EdgeEver con Docker Compose.
 
-Consulta la [guía de despliegue con Docker](docs/deploy-docker.md) para el despliegue manual y la configuración.
+Consulta la [guía de despliegue con Docker](../deploy-docker.md) para el despliegue manual y la configuración.
 
 Tras la instalación, las actualizaciones se ejecutan automáticamente cada día de forma predeterminada. Para actualizar manualmente, ejecuta `~/edgeever/update.sh` en el servidor de despliegue.
 
@@ -177,13 +179,13 @@ Ya sea para copias de seguridad rutinarias, migraciones fluidas entre instancias
 
 - **Copia de seguridad y restauración nativa de EdgeEver**: En la aplicación, ve a **Perfil** -> **Importar y exportar** para exportar o importar un archivo ZIP de EdgeEver en cualquier momento. El directorio descomprimido `notes/` conserva archivos Markdown de texto plano legibles y adjuntos para su archivado local o lectura directa, mientras que los metadatos estructurados internos permiten una restauración completa y sin pérdidas en diferentes instancias de EdgeEver. Al importar, se conservan los datos no relacionados existentes en la instancia de destino y se sobrescriben automáticamente los registros que coincidan en ID.
 - **Copia de seguridad automática programada y réplica remota en escritorio**: En **Copia de seguridad e importación** de la aplicación de escritorio, puedes activar copias locales programadas (semanales o mensuales) con carpeta personalizada, número de instantáneas retenidas y generación automática de archivos ZIP estándar o archivos cifrados `.edgeever.enc` cuando cambia el contenido, además de subida automática por WebDAV a un NAS o almacenamiento compatible tras cada copia local.
-- **Migración fluida desde aplicaciones de terceros**: Ya sea importando mediante la interfaz gráfica nativa con un solo clic (compatible con notas completas, jerarquías y adjuntos de Evernote, Obsidian y Joplin) o migrando desde Notion, flomo, Memos y otras plataformas mediante AI Agent y MCP, EdgeEver garantiza una transferencia de datos fluida y verificada. Consulta la [Guía de migración de notas de terceros](docs/note-migration-guide.en-US.md).
+- **Migración fluida desde aplicaciones de terceros**: Ya sea importando mediante la interfaz gráfica nativa con un solo clic (compatible con notas completas, jerarquías y adjuntos de Evernote, Obsidian y Joplin) o migrando desde Notion, flomo, Memos y otras plataformas mediante AI Agent y MCP, EdgeEver garantiza una transferencia de datos fluida y verificada. Consulta la [Guía de migración de notas de terceros](../note-migration-guide.en-US.md).
 
 ### Integración con IA y el protocolo MCP
 
 Crea un token de API en **Perfil** -> **API / MCP** y copia la configuración de Remote MCP con un solo clic para permitir que agentes de IA como Claude Code, Cursor, Antigravity y OpenClaw gestionen de forma segura tu base de conocimiento dentro de los permisos de tu cuenta. EdgeEver admite CRUD completo para notas de texto, notas de diagramas visuales (mapas mentales, diagramas de flujo y esquemas de arquitectura), notas de tablas estructuradas y notas tipo póster nativas. Los agentes también pueden gestionar la jerarquía de cuadernos, etiquetas, archivos adjuntos, historial de versiones, plantillas de notas e instrucciones de IA.
 
-Para la configuración de clientes, los niveles de acceso de los tokens, la resolución de problemas y reglas sugeridas para agentes, consulta [Using EdgeEver with MCP clients](docs/mcp-guide.md) (en inglés).
+Para la configuración de clientes, los niveles de acceso de los tokens, la resolución de problemas y reglas sugeridas para agentes, consulta [Using EdgeEver with MCP clients](../mcp-guide.md) (en inglés).
 
 > 💡 **Inspiración:**
 > Convierte a la IA en tu verdadero orquestador de conocimiento y copiloto creativo: transforma conceptos al instante en mapas mentales interactivos, diagramas de flujo, diagramas de arquitectura y tablas estructuradas, mientras proporcionas contexto privado a tus agentes de IA. Combinado con la potente edición de texto enriquecido y la elegante tipografía de EdgeEver, el contenido asistido por IA se convierte en activos de conocimiento bellamente estructurados, refinados y listos para publicar.
@@ -202,7 +204,7 @@ El administrador de la instancia puede crear, deshabilitar o restablecer cuentas
 
 ### Plugins y temas
 
-Las aplicaciones web y de escritorio admiten plugins funcionales y temas personalizados, instalables desde el marketplace oficial, GitHub o una URL de manifiesto, con sincronización transparente en todo tu espacio de trabajo. Los desarrolladores pueden ampliar las capacidades mediante `@edgeever/plugin-api`; consulta la [guía de desarrollo de plugins](docs/plugin-development.md) y la [política de publicación en el marketplace](docs/plugin-marketplace-policy.md).
+Las aplicaciones web y de escritorio admiten plugins funcionales y temas personalizados, instalables desde el marketplace oficial, GitHub o una URL de manifiesto, con sincronización transparente en todo tu espacio de trabajo. Los desarrolladores pueden ampliar las capacidades mediante `@edgeever/plugin-api`; consulta la [guía de desarrollo de plugins](../plugin-development.md) y la [política de publicación en el marketplace](../plugin-marketplace-policy.md).
 
 ---
 
@@ -270,13 +272,13 @@ content_text      Búsqueda de texto completo, generación de resúmenes e index
 ### Mecanismos clave y decisiones de diseño
 
 - **Compresión silenciosa en el cliente**: Para evitar consumir cuota de cómputo en entornos serverless como Cloudflare Workers, la compresión de imágenes se realiza en el cliente web antes de la subida (convirtiendo PNG/JPEG/WebP/AVIF a WebP cuando resulte ventajoso, con un borde máximo de 2560 px; se conserva el original si la compresión no reduce el tamaño). Los endpoints de la API REST y MCP almacenan directamente los binarios proporcionados por el cliente sin transcodificación adicional en el servidor.
-- **Prioridad sin conexión (Offline-First) y frecuencia de sincronización**: Los clientes Web y de escritorio suben automáticamente las modificaciones de notas tras 30 segundos de inactividad de escritura, y comprueban cambios remotos cada 5 minutos mientras la ventana permanece visible; al recuperar el foco o actualizar manualmente, la sincronización es inmediata. Estos parámetros son configurables a través de `DEFERRED_MEMO_SYNC_DELAY_MS` y `BACKGROUND_WORKSPACE_REFRESH_INTERVAL_MS` en [`apps/web/src/lib/workspace-refresh.ts`](apps/web/src/lib/workspace-refresh.ts).
+- **Prioridad sin conexión (Offline-First) y frecuencia de sincronización**: Los clientes Web y de escritorio suben automáticamente las modificaciones de notas tras 30 segundos de inactividad de escritura, y comprueban cambios remotos cada 5 minutos mientras la ventana permanece visible; al recuperar el foco o actualizar manualmente, la sincronización es inmediata. Estos parámetros son configurables a través de `DEFERRED_MEMO_SYNC_DELAY_MS` y `BACKGROUND_WORKSPACE_REFRESH_INTERVAL_MS` en [`apps/web/src/lib/workspace-refresh.ts`](../../apps/web/src/lib/workspace-refresh.ts).
 
 ### Contribuir con código
 
 ¡Las contribuciones de la comunidad son muy bienvenidas! Por favor, ten en cuenta las siguientes pautas:
 
-- Consulta la [Guía de contribución](CONTRIBUTING.md) antes de enviar código.
+- Consulta la [Guía de contribución](../CONTRIBUTING.md) antes de enviar código.
 - **Aislamiento del despliegue**: Si tu Fork de GitHub también se utiliza para desplegar EdgeEver, mantén su rama `main` limpia y dedicada exclusivamente al despliegue. Crea una rama independiente a partir de `upstream/main` oficial para funciones/correcciones y pull requests; no desarrolles ni ejecutes Sync fork directamente en la rama `main` de despliegue.
 
 ---
@@ -300,8 +302,8 @@ Te damos la bienvenida a la comunidad de EdgeEver, un punto de encuentro para de
 
 EdgeEver es un proyecto gratuito y de código abierto. Mantener el desarrollo de clientes multiplataforma, las pruebas continuas en dispositivos, la firma de código y el soporte para múltiples entornos de ejecución requiere dedicación y recursos constantes.
 
-- [Apoyar a EdgeEver](docs/sponsor.md) — Donación voluntaria mediante WeChat Pay o Alipay
-- [Patrocinadores y colaboradores](docs/partners.md) — Apoyo en infraestructura, herramientas de desarrollo, servicios o colaboración comunitaria
+- [Apoyar a EdgeEver](../sponsor.md) — Donación voluntaria mediante WeChat Pay o Alipay
+- [Patrocinadores y colaboradores](../partners.md) — Apoyo en infraestructura, herramientas de desarrollo, servicios o colaboración comunitaria
 
 ## Agradecimientos
 

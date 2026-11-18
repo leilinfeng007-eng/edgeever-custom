@@ -1,6 +1,8 @@
+[项目入口](../../README.md) · [源码导航](../source-map.zh-CN.md)
+
 <div align="center">
   <h1>
-    <img src="assets/brand/edgeever-icon.svg" alt="EdgeEver Logo" width="48" align="absmiddle" /> EdgeEver
+    <img src="../../assets/brand/edgeever-icon.svg" alt="EdgeEver Logo" width="48" align="absmiddle" /> EdgeEver
   </h1>
   <p>
     <b>AI 原生知识库与印象笔记 / Obsidian 替代方案。支持全平台瞬时同步、多形态富笔记（多维表格、思维导图、图表、海报）、网页剪藏与原生 MCP。Cloudflare 100% 免费托管或 Docker 自托管。</b>
@@ -18,15 +20,15 @@
     <b>简体中文</b> | <a href="README.zh-TW.md">繁體中文</a> | <a href="README.md">English</a> | <a href="README.es.md">Español</a> | <a href="README.de.md">Deutsch</a> | <a href="README.fr.md">Français</a> | <a href="README.ja.md">日本語</a> | <a href="README.pl-PL.md">Polski</a> | <a href="README.ru.md">Русский</a>
   </p>
   <p>
-    <a href="#wechat-group"><img src="assets/readme/community/wechat.svg" alt="WeChat" width="16" height="16" align="absmiddle" /> 微信交流群</a> &nbsp;|&nbsp;
+    <a href="#wechat-group"><img src="../../assets/readme/community/wechat.svg" alt="WeChat" width="16" height="16" align="absmiddle" /> 微信交流群</a> &nbsp;|&nbsp;
     <a href="https://demo.edgeever.org">🌐 在线演示</a> &nbsp;|&nbsp;
     <a href="https://github.com/users/tianma-if/projects/1">🗺️ 路线图</a> &nbsp;|&nbsp;
     <a href="#全平台客户端与浏览器插件">📱 客户端与插件下载</a> &nbsp;|&nbsp;
     <a href="#features">核心功能与场景矩阵</a> &nbsp;|&nbsp;
-    <a href="docs/note-migration-guide.md">📥 第三方笔记迁入</a>
+    <a href="../note-migration-guide.md">📥 第三方笔记迁入</a>
   </p>
   <p align="center">
-    <img src="assets/readme/edgeever-hero-v8.png" alt="EdgeEver 产品工作区预览" width="800" />
+    <img src="../../assets/readme/edgeever-hero-v8.png" alt="EdgeEver 产品工作区预览" width="800" />
   </p>
 </div>
 
@@ -60,11 +62,11 @@ EdgeEver 是一款现代化的开源笔记与个人知识库工作区。它保�
 ### 客户端下载
 
 <p>
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/macos.svg" alt="下载 macOS 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/windows.svg" alt="下载 Windows 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/tux.svg" alt="下载 Linux x86_64 AppImage 预览版" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile"><img src="assets/readme/platforms/google-play.svg" alt="从 Google Play 下载 Android 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://apps.apple.com/us/app/edgeever/id6792625631"><img src="assets/readme/platforms/app-store.svg" alt="从 App Store 下载 iOS 客户端" width="40" height="40" /></a>
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/macos.svg" alt="下载 macOS 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/windows.svg" alt="下载 Windows 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/tux.svg" alt="下载 Linux x86_64 AppImage 预览版" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile"><img src="../../assets/readme/platforms/google-play.svg" alt="从 Google Play 下载 Android 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://apps.apple.com/us/app/edgeever/id6792625631"><img src="../../assets/readme/platforms/app-store.svg" alt="从 App Store 下载 iOS 客户端" width="40" height="40" /></a>
 </p>
 
 > iOS 客户端需要使用非中国大陆区 Apple ID 下载。
@@ -83,7 +85,7 @@ EdgeEver 是一款现代化的开源笔记与个人知识库工作区。它保�
 <a id="features"></a>
 ## 核心功能与场景矩阵
 
-一站式连接「灵感捕获 · 深度创作 · 知识沉淀」的全能工作区（👉 **[查看 20 个实机案例演示与最佳实践](docs/best-practices.zh-CN.md)**）：
+一站式连接「灵感捕获 · 深度创作 · 知识沉淀」的全能工作区（👉 **[查看 20 个实机案例演示与最佳实践](../best-practices.zh-CN.md)**）：
 
 | 模块 | 基础功能 | 进阶特性 |
 | :--- | :--- | :--- |
@@ -122,7 +124,7 @@ Cloudflare 在线部署可以选择以下两种方式之一：
    后续由该工作流自动同步正式版本，持续获得功能更新和问题修复。
 ```
 
-> 详细约定与要求请查看：[AI Agent 在线部署约定](docs/agent-deploy-cloudflare.zh-CN.md)。
+> 详细约定与要求请查看：[AI Agent 在线部署约定](../agent-deploy-cloudflare.zh-CN.md)。
 
 ### 方案二：手动在线部署
 
@@ -139,7 +141,7 @@ Cloudflare 在线部署可以选择以下两种方式之一：
 6. **配置部署权限**：在该 Worker 的 Settings → Builds → API token 中选择或创建用于部署的 Cloudflare API Token，并确保它具备目标账户的 D1 读取和编辑权限。
 7. **构建并验证**：在 Fork 的 GitHub 仓库中进入 Actions → Update deployed EdgeEver，按提示启用工作流， 选择 `main` 分支并点击 Run workflow。在 Cloudflare 确认对应构建成功、部署完成后，确认 `/api/health` 返回 `200`，并验证登录。后续由该工作流自动同步正式版本，持续获得功能更新和问题修复。
 
-> 📖 包含具体参数与构建命令的详细步骤，请查看 [在线部署完整文档](docs/deploy-cloudflare-button.zh-CN.md)。
+> 📖 包含具体参数与构建命令的详细步骤，请查看 [在线部署完整文档](../deploy-cloudflare-button.zh-CN.md)。
 
 </details>
 
@@ -154,7 +156,7 @@ Cloudflare 在线部署可以选择以下两种方式之一：
 
 ### 方案三：在 VPS 或 NAS 上使用 Docker
 
-Docker 与 Cloudflare 共用同一套前端、API 路由、业务服务、鉴权、MCP 实现和 migration。容器使用 SQLite，并支持本地文件或 S3 兼容附件存储，提供 `amd64` 与 `arm64` 镜像。详见[使用 Docker 部署 EdgeEver](docs/deploy-docker.zh-CN.md)和[自托管与 Docker 架构](docs/self-hosting-architecture.zh-CN.md)。
+Docker 与 Cloudflare 共用同一套前端、API 路由、业务服务、鉴权、MCP 实现和 migration。容器使用 SQLite，并支持本地文件或 S3 兼容附件存储，提供 `amd64` 与 `arm64` 镜像。详见[使用 Docker 部署 EdgeEver](../deploy-docker.zh-CN.md)和[自托管与 Docker 架构](../self-hosting-architecture.zh-CN.md)。
 
 使用 GitHub 托管的安装脚本和官方 GHCR 镜像：
 
@@ -162,7 +164,7 @@ Docker 与 Cloudflare 共用同一套前端、API 路由、业务服务、鉴权
 curl -fsSL https://edgeever.org/install.sh | bash
 ```
 
-该命令会自动拉取最新镜像、生成管理员密码，并使用 Docker Compose 启动 EdgeEver。手动部署与配置说明见 [Docker 部署文档](docs/deploy-docker.zh-CN.md)。
+该命令会自动拉取最新镜像、生成管理员密码，并使用 Docker Compose 启动 EdgeEver。手动部署与配置说明见 [Docker 部署文档](../deploy-docker.zh-CN.md)。
 
 安装后默认每日自动更新。如需手动更新，请在部署服务器上运行 `~/edgeever/update.sh`。
 
@@ -178,13 +180,13 @@ curl -fsSL https://edgeever.org/install.sh | bash
 
 - **EdgeEver 原生备份与还原**：在应用内进入 **个人中心** -> **导入与导出**，可随时导出或导入 EdgeEver ZIP 档案包。解压后的 `notes/` 目录保留清晰的纯文本 Markdown 文件与附件，可直接用于本地归档或独立阅读；内部结构化元数据则支持在不同 EdgeEver 实例间无损全量还原。导入时保留目标实例的既有数据，同 ID 内容自动覆盖更新。
 - **桌面端定时自动备份与异地副本**：在桌面客户端的 **备份与导入** 设置中支持开启本地定时自动备份，可自定义备份目录、周期（每周 / 每月）与快照保留份数，内容有变更时自动生成标准 ZIP 或 `.edgeever.enc` 加密归档；同时支持配置 WebDAV 异地副本，每次本地备份完成后自动上传至 NAS 或兼容存储。
-- **第三方笔记平滑迁入**：无论是通过 Web/桌面端图形界面原生一键导入（支持印象笔记/Evernote、Obsidian、Joplin 的完整笔记、层级与附件），还是借助 AI Agent (MCP) 协同迁入 Notion、flomo、Memos 等知识库，EdgeEver 均提供无缝、可验证的迁移能力。详见 [第三方笔记平滑迁入 EdgeEver 完整指南](docs/note-migration-guide.md)。
+- **第三方笔记平滑迁入**：无论是通过 Web/桌面端图形界面原生一键导入（支持印象笔记/Evernote、Obsidian、Joplin 的完整笔记、层级与附件），还是借助 AI Agent (MCP) 协同迁入 Notion、flomo、Memos 等知识库，EdgeEver 均提供无缝、可验证的迁移能力。详见 [第三方笔记平滑迁入 EdgeEver 完整指南](../note-migration-guide.md)。
 
 ### AI 与 MCP 协议互联
 
 在 **个人中心** -> **API / MCP** 中创建 API Token 并一键复制 Remote MCP 配置，即可让 Claude Code、Cursor、Antigravity、OpenClaw 等 AI Agent 在账号授权范围内安全管理你的知识库。系统支持文本笔记、图表笔记（思维导图、流程图与架构图）、多维表格笔记与原生海报笔记的完整增删改查，Agent 还可管理笔记本目录、标签、附件、历史版本、笔记模板与 AI 指令。
 
-客户端配置、Token 权限、问题排查和 Agent 工作规则示例，请参阅 [在 MCP 客户端与 AI Agent 中使用 EdgeEver](docs/mcp-guide.zh-CN.md)。
+客户端配置、Token 权限、问题排查和 Agent 工作规则示例，请参阅 [在 MCP 客户端与 AI Agent 中使用 EdgeEver](../mcp-guide.zh-CN.md)。
 
 > 💡 **场景启发：**
 > 让 AI 真正成为你的知识管家与创作外脑——不仅能将方案秒级生成为可交互的思维导图、流程图、架构图与多维表格，还能为 AI Agent 提供私有知识上下文。依托 EdgeEver 强大的富文本编辑与精美排版能力，AI 协同沉淀的不再是冰冷文本，而是结构工整、排版优雅、随时可一键分发的高品质知识资产。
@@ -203,7 +205,7 @@ curl -fsSL https://edgeever.org/install.sh | bash
 
 ### 插件与个性化主题
 
-Web 与桌面端支持功能插件与个性化主题，可从官方市场、GitHub 或 Manifest 地址一键安装，并随工作区跨端同步。开发者可使用 `@edgeever/plugin-api` 扩展能力，详见[插件开发文档](docs/plugin-development.zh-CN.md)与[官方插件市场上架政策](docs/plugin-marketplace-policy.zh-CN.md)。
+Web 与桌面端支持功能插件与个性化主题，可从官方市场、GitHub 或 Manifest 地址一键安装，并随工作区跨端同步。开发者可使用 `@edgeever/plugin-api` 扩展能力，详见[插件开发文档](../plugin-development.zh-CN.md)与[官方插件市场上架政策](../plugin-marketplace-policy.zh-CN.md)。
 
 ---
 
@@ -271,13 +273,13 @@ content_text      全文搜索、摘要与快速索引使用
 ### 核心机制与设计决策
 
 - **端侧静默压缩**：为避免在 Serverless（如 Cloudflare Worker）上执行图片转码消耗宝贵的计算额度，图片压缩全部放在 Web 客户端上传前完成（PNG/JPEG/WebP/AVIF 转 WebP，最大边限制 2560px；不减小体积则保留原图）。服务端 REST API 与 MCP 接口直接入库客户端传输的原始内容。
-- **离线优先与同步时序**：Web 与桌面端会在用户停止编辑 30 秒后自动上传增量，并在前台页面可见时每 5 分钟拉取一次云端变更；窗口重聚焦或手动刷新时立即同步。开发者可在 [`apps/web/src/lib/workspace-refresh.ts`](apps/web/src/lib/workspace-refresh.ts) 中调整相关时序常量（`DEFERRED_MEMO_SYNC_DELAY_MS` 与 `BACKGROUND_WORKSPACE_REFRESH_INTERVAL_MS`）。
+- **离线优先与同步时序**：Web 与桌面端会在用户停止编辑 30 秒后自动上传增量，并在前台页面可见时每 5 分钟拉取一次云端变更；窗口重聚焦或手动刷新时立即同步。开发者可在 [`apps/web/src/lib/workspace-refresh.ts`](../../apps/web/src/lib/workspace-refresh.ts) 中调整相关时序常量（`DEFERRED_MEMO_SYNC_DELAY_MS` 与 `BACKGROUND_WORKSPACE_REFRESH_INTERVAL_MS`）。
 
 ### 参与代码贡献
 
 我们非常欢迎社区贡献！贡献前请留意以下约定：
 
-- 提交代码前请仔细阅读 [贡献代码须知](CONTRIBUTING.zh-CN.md)。
+- 提交代码前请仔细阅读 [贡献代码须知](../CONTRIBUTING.zh-CN.md)。
 - **分支与部署隔离**：如果您的 GitHub Fork 同时用于在线部署 EdgeEver，请将 `main` 分支严格保留为只读部署分支；请从官方 `upstream/main` 创建新分支进行功能开发并提交 Pull Request，严禁在部署用的 `main` 分支上直接修改代码或执行 Sync fork。
 
 ---
@@ -295,7 +297,7 @@ content_text      全文搜索、摘要与快速索引使用
 > 扫描下方二维码或添加微信 `m1245207870`（备注“EdgeEver 进群”），群主将手动邀请入群。
 
 <p align="center">
-  <img src="assets/wechat-group-qr.jpg" alt="微信联系人二维码" width="260" />
+  <img src="../../assets/wechat-group-qr.jpg" alt="微信联系人二维码" width="260" />
 </p>
 
 ## 友情链接
@@ -306,8 +308,8 @@ content_text      全文搜索、摘要与快速索引使用
 
 EdgeEver 是免费开源项目。保持跨平台客户端（macOS、Windows、Linux、iOS、Android）的持续演进、真机测试、证书签名以及多运行时生态建设，都需要长期的精力与资源投入。
 
-- [支持 EdgeEver](docs/sponsor.zh-CN.md) —— 通过微信支付或支付宝自愿赞助
-- [赞助商与合作伙伴](docs/partners.zh-CN.md) —— 支持基础设施、开发工具、服务或社区合作
+- [支持 EdgeEver](../sponsor.zh-CN.md) —— 通过微信支付或支付宝自愿赞助
+- [赞助商与合作伙伴](../partners.zh-CN.md) —— 支持基础设施、开发工具、服务或社区合作
 
 ## 致谢
 

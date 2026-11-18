@@ -1,6 +1,8 @@
+[Project entry](../../README.md) · [Source map](../source-map.md)
+
 <div align="center">
   <h1>
-    <img src="assets/brand/edgeever-icon.svg" alt="EdgeEver のロゴ" width="48" align="absmiddle" /> EdgeEver
+    <img src="../../assets/brand/edgeever-icon.svg" alt="EdgeEver のロゴ" width="48" align="absmiddle" /> EdgeEver
   </h1>
   <p>
     <b>AI ネイティブ知識ベース＆ Evernote / Obsidian 代替ツール。全プラットフォーム瞬時同期、多彩なノート形式（テーブル、マインドマップ、図表、ポスター）、Web クリッパー、MCP に対応。Cloudflare で 100% 無料運用または Docker 自前運用。</b>
@@ -18,15 +20,15 @@
     <a href="README.zh-CN.md">简体中文</a> | <a href="README.zh-TW.md">繁體中文</a> | <a href="README.md">English</a> | <a href="README.es.md">Español</a> | <a href="README.de.md">Deutsch</a> | <a href="README.fr.md">Français</a> | <b>日本語</b> | <a href="README.pl-PL.md">Polski</a> | <a href="README.ru.md">Русский</a>
   </p>
   <p>
-    <a href="https://t.me/+GvKYnL37feUwOTNl"><img src="assets/readme/community/telegram.svg" alt="Telegram" width="16" height="16" align="absmiddle" /> Telegram グループ</a> &nbsp;|&nbsp;
+    <a href="https://t.me/+GvKYnL37feUwOTNl"><img src="../../assets/readme/community/telegram.svg" alt="Telegram" width="16" height="16" align="absmiddle" /> Telegram グループ</a> &nbsp;|&nbsp;
     <a href="https://demo.edgeever.org">🌐 オンラインデモ</a> &nbsp;|&nbsp;
     <a href="https://github.com/users/tianma-if/projects/1">🗺️ ロードマップ</a> &nbsp;|&nbsp;
     <a href="#全プラットフォームクライアントと拡張機能">📱 クライアントと拡張機能</a> &nbsp;|&nbsp;
     <a href="#features">機能とワークフローマトリクス</a> &nbsp;|&nbsp;
-    <a href="docs/note-migration-guide.md">📥 ノート移行ガイド</a>
+    <a href="../note-migration-guide.md">📥 ノート移行ガイド</a>
   </p>
   <p align="center">
-    <img src="assets/readme/edgeever-hero-v8-en.png" alt="EdgeEver ワークスペースプレビュー" width="800" />
+    <img src="../../assets/readme/edgeever-hero-v8-en.png" alt="EdgeEver ワークスペースプレビュー" width="800" />
   </p>
 </div>
 
@@ -60,11 +62,11 @@ EdgeEver は、オープンソースのノートと知識ベースの作業領�
 ### クライアントのダウンロード
 
 <p>
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/macos.svg" alt="macOS 向け EdgeEver をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/windows.svg" alt="Windows 向け EdgeEver をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/tux.svg" alt="Linux x86_64 AppImage Preview をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile&hl=ja"><img src="assets/readme/platforms/google-play.svg" alt="Google Play から Android 向け EdgeEver をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://apps.apple.com/jp/app/edgeever/id6792625631"><img src="assets/readme/platforms/app-store.svg" alt="App Store から iOS 向け EdgeEver をダウンロード" width="40" height="40" /></a>
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/macos.svg" alt="macOS 向け EdgeEver をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/windows.svg" alt="Windows 向け EdgeEver をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="../../assets/readme/platforms/tux.svg" alt="Linux x86_64 AppImage Preview をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile&hl=ja"><img src="../../assets/readme/platforms/google-play.svg" alt="Google Play から Android 向け EdgeEver をダウンロード" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://apps.apple.com/jp/app/edgeever/id6792625631"><img src="../../assets/readme/platforms/app-store.svg" alt="App Store から iOS 向け EdgeEver をダウンロード" width="40" height="40" /></a>
 </p>
 
 > iOS アプリは、中国本土以外の Apple ID が必要です。
@@ -83,7 +85,7 @@ EdgeEver は、オープンソースのノートと知識ベースの作業領�
 <a id="features"></a>
 ## 機能とワークフローマトリクス
 
-「インスピレーションの収集 · 深い創作 · 知識の蓄積」をシームレスにつなぐオールインワンワークスペース（👉 **[全 20 の実機スクリーンショットと活用ガイドを見る](docs/best-practices.md)**）：
+「インスピレーションの収集 · 深い創作 · 知識の蓄積」をシームレスにつなぐオールインワンワークスペース（👉 **[全 20 の実機スクリーンショットと活用ガイドを見る](../best-practices.md)**）：
 
 | モジュール | 基本機能 | 高度な機能 |
 | :--- | :--- | :--- |
@@ -121,7 +123,7 @@ GitHub と Cloudflare のオンライン操作だけで EdgeEver を導入して
    以後、このワークフローが安定版と修正を自動で同期します。
 ```
 
-> 詳細な要件: [AI Agent Cloudflare Deployment](docs/agent-deploy-cloudflare.md)。
+> 詳細な要件: [AI Agent Cloudflare Deployment](../agent-deploy-cloudflare.md)。
 
 ### 方法 B: 手動のオンライン導入
 
@@ -138,7 +140,7 @@ GitHub と Cloudflare のオンライン操作だけで EdgeEver を導入して
 6. **デプロイ権限を設定**：同じ Worker の Settings → Builds → API token でデプロイ用の Cloudflare API トークンを選択または作成し、対象アカウントの D1 読み取り・編集権限を確認します。
 7. **ビルドと確認**：Fork の GitHub リポジトリで Actions → Update deployed EdgeEver を開き、必要に応じて有効化して、 `main` ブランチで Run workflow を選択します。Cloudflare で対応するビルドの成功とデプロイの完了を確認してから、 `/api/health` が `200` を返すこととログインを確認します。以後、このワークフローが安定版と修正を自動で同期します。
 
-> 📖 手順と設定の詳細は [Online Deployment Guide](docs/deploy-cloudflare-button.md) を見てください。
+> 📖 手順と設定の詳細は [Online Deployment Guide](../deploy-cloudflare-button.md) を見てください。
 
 </details>
 
@@ -153,7 +155,7 @@ GitHub と Cloudflare のオンライン操作だけで EdgeEver を導入して
 
 ### 方法 C: VPS または NAS で Docker
 
-Docker は Cloudflare と同じフロントエンド、API、サービス、認証、MCP、migration です。コンテナは SQLite と、ローカルファイルまたは S3 互換の添付保存を使い、`amd64` と `arm64` に対応します。 [Deploy EdgeEver with Docker](docs/deploy-docker.md) と [Self-hosting and Docker architecture](docs/self-hosting-architecture.md) を見てください。
+Docker は Cloudflare と同じフロントエンド、API、サービス、認証、MCP、migration です。コンテナは SQLite と、ローカルファイルまたは S3 互換の添付保存を使い、`amd64` と `arm64` に対応します。 [Deploy EdgeEver with Docker](../deploy-docker.md) と [Self-hosting and Docker architecture](../self-hosting-architecture.md) を見てください。
 
 GitHub ホストのインストーラと公式 GHCR イメージを使います。
 
@@ -163,7 +165,7 @@ curl -fsSL https://edgeever.org/install.sh | bash
 
 このコマンドは最新イメージを引き、管理者パスワードを生成し、Docker Compose で EdgeEver を起動します。
 
-手動導入と設定は [Docker deployment guide](docs/deploy-docker.md) を見てください。
+手動導入と設定は [Docker deployment guide](../deploy-docker.md) を見てください。
 
 インストール後は既定で毎日自動更新されます。手動で更新する場合は、導入先のサーバーで `~/edgeever/update.sh` を実行してください。
 
@@ -177,13 +179,13 @@ curl -fsSL https://edgeever.org/install.sh | bash
 
 - **EdgeEver ネイティブのバックアップと復元**：アプリ内の **プロフィール** -> **インポートとエクスポート** から、いつでも EdgeEver ZIP アーカイブを書き出し、または取り込めます。解凍後の `notes/` ディレクトリには Markdown ファイルと添付がそのまま保持され、ローカル保管や直接閲覧に利用できます。内部の構造化メタデータにより、異なる EdgeEver インスタンス間でも無劣化で完全復元が可能です。取り込み時は無関係な既存データを残し、同一 ID のノートを自動で上書き更新します。
 - **デスクトップ版の定期自動バックアップとオフサイト複製**：デスクトップアプリの **バックアップとインポート** 設定からローカル定期自動バックアップを有効化でき、保存先フォルダ・頻度（毎週 / 毎月）・世代保持数を指定して、内容変更時に標準 ZIP または暗号化 `.edgeever.enc` アーカイブを自動作成できます。各ローカルバックアップ完了後に NAS や対応ストレージへ WebDAV で自動アップロードすることも可能です。
-- **サードパーティ製ノートからのスムーズな移行**：Web / デスクトップ版のネイティブなワンクリックインポート（Evernote、Obsidian、Joplin のノート、階層、添付に完全対応）から、AI Agent (MCP) による Notion、flomo、Memos などの移行まで、EdgeEver はシームレスで検証可能なデータ移行を提供します。詳細は [サードパーティ製ノート移行ガイド](docs/note-migration-guide.md) を参照してください。
+- **サードパーティ製ノートからのスムーズな移行**：Web / デスクトップ版のネイティブなワンクリックインポート（Evernote、Obsidian、Joplin のノート、階層、添付に完全対応）から、AI Agent (MCP) による Notion、flomo、Memos などの移行まで、EdgeEver はシームレスで検証可能なデータ移行を提供します。詳細は [サードパーティ製ノート移行ガイド](../note-migration-guide.md) を参照してください。
 
 ### AI と MCP プロトコル連携
 
 **プロフィール** -> **API / MCP** で API トークンを作成し、ワンクリックで Remote MCP 設定をコピーすることで、Claude Code、Cursor、Antigravity、OpenClaw などの AI Agent がアカウント権限の範囲内で知識ベースを安全に管理できます。テキストノート、図のノート（マインドマップ、フローチャート、アーキテクチャ図）、多次元テーブルノート、ネイティブポスターノートの完全な CRUD に対応し、Agent はノートブック階層、タグ、添付ファイル、履歴バージョン、ノートテンプレート、AI 指示の管理も行えます。
 
-クライアントの設定、トークンの権限、トラブルシューティング、エージェント向けルールの例は [Using EdgeEver with MCP clients](docs/mcp-guide.md)（英語）を参照してください。
+クライアントの設定、トークンの権限、トラブルシューティング、エージェント向けルールの例は [Using EdgeEver with MCP clients](../mcp-guide.md)（英語）を参照してください。
 
 > 💡 **着想：**
 > AI を知識の整理役と創作の相棒にしてください。構想をインタラクティブなマインドマップ、フローチャート、アーキテクチャ図、多次元テーブルへ瞬時に落とし込み、Agent に私有の文脈を渡せます。EdgeEver のリッチテキストと美しい体裁と組み合わせることで、AI が手伝った内容は、整った、いつでも配布できる高品質な知識資産になります。
@@ -202,7 +204,7 @@ curl -fsSL https://edgeever.org/install.sh | bash
 
 ### プラグインとカスタムテーマ
 
-Web とデスクトップは機能プラグインとカスタムテーマに対応し、公式マーケット、GitHub、Manifest URL から手軽に導入でき、作業領域を通じて同期されます。開発者は `@edgeever/plugin-api` で拡張できます。詳細は [plugin development guide](docs/plugin-development.md) と [marketplace submission policy](docs/plugin-marketplace-policy.md) を参照してください。
+Web とデスクトップは機能プラグインとカスタムテーマに対応し、公式マーケット、GitHub、Manifest URL から手軽に導入でき、作業領域を通じて同期されます。開発者は `@edgeever/plugin-api` で拡張できます。詳細は [plugin development guide](../plugin-development.md) と [marketplace submission policy](../plugin-marketplace-policy.md) を参照してください。
 
 ---
 
@@ -270,13 +272,13 @@ content_text      全文検索、要約生成、索引
 ### コアメカニズムと設計上の決定
 
 - **クライアント側での静默圧縮**：Cloudflare Workers などの Serverless ランタイムで画像トランスコードを行い計算枠を消費するのを防ぐため、画像圧縮は Web クライアント側のアップロード前に完結させます（PNG/JPEG/WebP/AVIF を WebP に変換、長辺 2560px 制限；サイズが小さくならなければ原画像を維持）。サーバー側の REST API や MCP アップロードはクライアントから受け取った内容をそのまま格納します。
-- **オフライン優先と同期のタイミング**：Web、デスクトップは、ユーザーの編集が 30 秒間止まった段階で増分を自動アップロードし、フォアグラウンド表示中は 5 分ごとにクラウドの変更を確認します。ウィンドウへのフォーカス復帰や手動更新時は即座に同期されます。開発者は [`apps/web/src/lib/workspace-refresh.ts`](apps/web/src/lib/workspace-refresh.ts) 内の定数（`DEFERRED_MEMO_SYNC_DELAY_MS` および `BACKGROUND_WORKSPACE_REFRESH_INTERVAL_MS`）で調整できます。
+- **オフライン優先と同期のタイミング**：Web、デスクトップは、ユーザーの編集が 30 秒間止まった段階で増分を自動アップロードし、フォアグラウンド表示中は 5 分ごとにクラウドの変更を確認します。ウィンドウへのフォーカス復帰や手動更新時は即座に同期されます。開発者は [`apps/web/src/lib/workspace-refresh.ts`](../../apps/web/src/lib/workspace-refresh.ts) 内の定数（`DEFERRED_MEMO_SYNC_DELAY_MS` および `BACKGROUND_WORKSPACE_REFRESH_INTERVAL_MS`）で調整できます。
 
 ### コードへの貢献
 
 コミュニティからの貢献を歓迎します！貢献の際は以下の約束にご協力ください：
 
-- コードを提出する前に [Contribution Guide](CONTRIBUTING.md) をご一読ください。
+- コードを提出する前に [Contribution Guide](../CONTRIBUTING.md) をご一読ください。
 - **本番導入とブランチの分離**：自身の GitHub Fork を EdgeEver のオンライン導入用にも使用している場合、その `main` ブランチはデプロイ専用のクリーンな状態に維持してください。機能開発やプルリクエスト作成は必ず公式の `upstream/main` から作成した別ブランチで行い、デプロイ用 `main` での直接作業や Sync fork は避けてください。
 
 ---
@@ -299,8 +301,8 @@ EdgeEver コミュニティへようこそ。Vibe Coding や AI を探求する�
 
 EdgeEver は無料のオープンソースプロジェクトです。クロスプラットフォームクライアント（macOS、Windows、Linux、iOS、Android）の継続的な開発、実機テスト、コード署名、複数ランタイムのエコシステム維持には、継続的な時間とリソースの投入が必要です。
 
-- [EdgeEver を支援する](docs/sponsor.md) — WeChat Pay または Alipay による自发的な寄付
-- [スポンサーとパートナー](docs/partners.md) — インフラ、開発ツール、サービス、コミュニティ連携の支援
+- [EdgeEver を支援する](../sponsor.md) — WeChat Pay または Alipay による自发的な寄付
+- [スポンサーとパートナー](../partners.md) — インフラ、開発ツール、サービス、コミュニティ連携の支援
 
 ## 謝辞
 
