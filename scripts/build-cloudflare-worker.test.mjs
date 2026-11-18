@@ -86,7 +86,7 @@ test("keeps model runtimes and SDKs out of the entire Cloudflare Worker build", 
       .map(([input]) => input.replaceAll("\\", "/")),
   ))];
   const runtimeSources = ["ai-runtime", "companion-runtime", "companion-discovery-runtime"]
-    .map(name => `apps/api/src/${name}.ts`);
+    .map(name => `apps/api/src/ai/${name}.ts`);
   const isAiInput = path => runtimeSources.includes(path)
     || /(?:^|\/)node_modules\/(?:ai|@ai-sdk\/[^/]+)\//.test(path);
   expect(inputsFor(startup).filter(isAiInput)).toEqual([]);

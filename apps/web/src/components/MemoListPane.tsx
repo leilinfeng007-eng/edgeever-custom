@@ -350,6 +350,7 @@ const MobileSelectionActionBar = ({
 };
 
 export const MemoListPane = ({
+  classification,
   notebooks,
   notebook,
   selectedTag,
@@ -424,6 +425,7 @@ export const MemoListPane = ({
   onRetry,
   multiSelectKeyDown,
 }: {
+  classification?: ReactNode;
   isLoading: boolean;
   isRefreshing: boolean;
   isError: boolean;
@@ -1429,6 +1431,7 @@ export const MemoListPane = ({
             </button>
           </m.div>
         )}
+        {classification}
       </header>
 
       <div

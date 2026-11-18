@@ -144,6 +144,49 @@ describe("direct companion client", () => {
   });
 });
 
+test("direct companion executes a tool when the browser lacks randomUUID", async () => {
+  const { streamDirectCompanion } = await import("./companion-direct-stream.ts");
+  const previous = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+  const events = [];
+  const toolRequests = [];
+  const completed = [];
+  const name = "list_notebooks";
+  const chunks = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name, arguments: "{}" } }] }, finish_reason: null }] },
+    { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+  ];
+  Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+  try {
+    await streamDirectCompanion({
+      ...preparedTurn,
+      maxSteps: 1,
+      tools: [{ name, description: "List notebooks", inputSchema: { type: "object", properties: {} } }],
+    }, {
+      fetch: async () => new Response(chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      }),
+      onEvent: event => events.push(event),
+      executeTool: async request => {
+        toolRequests.push(request);
+        return { tools: [{ id: "tool-1", name, status: "done", effects: [] }], todos: [], questions: [], result: { notebooks: [] } };
+      },
+      checkpoint: async () => {},
+      complete: async body => {
+        completed.push(body);
+        return { turn: { ...preparedTurn.turn, ...body } };
+      },
+    });
+  } finally {
+    if (previous) Object.defineProperty(crypto, "randomUUID", previous);
+    else delete crypto.randomUUID;
+  }
+  expect(toolRequests).toEqual([expect.objectContaining({ name, input: {} })]);
+  const pending = events.find(event => event.type === "tools")?.tools[0];
+  expect(pending).toMatchObject({ name, status: "running" });
+  expect(pending.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  expect(completed).toEqual([expect.objectContaining({ status: "completed" })]);
+});
+
 test("direct provider rejection includes safe diagnostics and completes the failed turn once", async () => {
   const { streamDirectCompanion } = await import("./companion-direct-stream.ts");
   const events = [];

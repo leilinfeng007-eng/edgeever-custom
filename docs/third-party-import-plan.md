@@ -20,7 +20,7 @@ All three sources and all file, directory, and archive forms requested by the Is
 | --- | --- | --- |
 | `apps/web/src/components/SettingsPane.tsx` | Web uses `DataExportCard`; desktop uses `DesktopScheduledBackupCard` | Keep both backup entries; replace the guide card with third-party import and retain its guide link |
 | `packages/shared/src/backup-archive.ts` | Uses `@zip.js/zip.js` 2.24.0 for ZIP64, entry reads, and streaming restore | Reuse the dependency and reading approach without requiring an EdgeEver manifest or changing the backup format |
-| `apps/api/src/memo-service.ts::importMemosRecord` | Batches of 1–25 notes, per-item results, imported timestamps, and `source + externalId` idempotency through the database adapter | Add a thin REST entry that reuses this service; retain existing MCP semantics |
+| `apps/api/src/notes/memo-service.ts::importMemosRecord` | Batches of 1–25 notes, per-item results, imported timestamps, and `source + externalId` idempotency through the database adapter | Add a thin REST entry that reuses this service; retain existing MCP semantics |
 | `packages/client/src/index.ts` | Creation accepts timestamps; resources support multipart uploads; document updates require edit sessions and version protection | Add import methods and the optional update timestamp fields already supported by the server |
 | `apps/web/src/lib/desktop-sync.ts` | `pauseDesktopSyncForImport()` waits for active sync and returns a release function | Hold it after confirmation, release on every exit path, and refresh only after releasing |
 | `crates/desktop-sidecar/src/memo.rs::create_memo` | Ordinary local creation uses database-generated times rather than imported timestamp parameters | Do not route this import through ordinary local creation or extend Rust storage and offline queue protocols |
@@ -86,7 +86,7 @@ Process only one note's body and attachments at a time, releasing its bytes afte
 
 ### API additions
 
-Add `apps/api/src/import-routes.ts` with:
+Add `apps/api/src/notes/import-routes.ts` with:
 
 - `GET /api/v1/imports/capabilities`: protocol version and the existing batch limit, checked before any writes. An unsupported older server prompts an upgrade for this entry only; existing editing, sync, and backups remain usable.
 - `POST /api/v1/imports/memos`: accepts `importId`, format, destination notebook, items, and `dryRun`, validates them, and calls `importMemosRecord`. The server constructs `third-party-<format>-<importId>` as the source; each note uses a fixed preflight item ID, respecting existing source/external-ID limits of 80/512 characters. Return per-item created, skipped, and failed outcomes.

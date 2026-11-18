@@ -5,7 +5,7 @@ import { Database } from "bun:sqlite";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fetchEdgeEverApp } from "../apps/api/src/index.ts";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter.ts";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter.ts";
 
 const directory = process.argv[2];
 if (!directory) throw new Error("Pass the test data directory as the first argument.");

@@ -7,9 +7,9 @@ application and differ only at thin runtime and infrastructure adapter seams.
 ## Current boundary
 
 The API's business and route logic must depend on the storage contracts in
-`apps/api/src/storage-contract.ts`, not on a Cloudflare SDK type directly. The
+`apps/api/src/storage/storage-contract.ts`, not on a Cloudflare SDK type directly. The
 current concrete implementation lives in
-`apps/api/src/cloudflare-storage-adapter.ts`:
+`apps/api/src/storage/cloudflare-storage-adapter.ts`:
 
 - `DatabaseAdapter`: SQL statements and batches.
 - `BlobStoreAdapter`: attachment `get`, `put`, and `delete` operations.

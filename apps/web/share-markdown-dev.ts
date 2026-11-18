@@ -3,7 +3,7 @@ import {
   PUBLIC_SHARE_MARKDOWN_NOT_FOUND,
   PUBLIC_SHARE_MARKDOWN_PASSWORD,
   publicShareMarkdown,
-} from "../api/src/share-page.ts";
+} from "../api/src/notes/share-page.ts";
 import { PUBLIC_PAGE_HEADERS } from "@edgeever/shared/public-page-headers";
 import type { Plugin } from "vite";
 

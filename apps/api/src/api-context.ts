@@ -1,6 +1,10 @@
+/**
+ * API 共用上下文：集中定义运行时 bindings、认证身份与审计主体。
+ * 业务模块依赖 storage 契约，不直接依赖某个平台的数据库对象。
+ */
 import type { Context } from "hono";
-import type { CloudflareStorageBindings } from "./cloudflare-storage-adapter";
-import type { StorageAdapter } from "./storage-contract";
+import type { CloudflareStorageBindings } from "./storage/cloudflare-storage-adapter";
+import type { StorageAdapter } from "./storage/storage-contract";
 
 export type Bindings = {
   /** Runtime driver for public-only egress; no platform-specific business logic. */
@@ -9,6 +13,7 @@ export type Bindings = {
   storage: StorageAdapter;
   EDGE_EVER_AUTH_USERNAME?: string;
   EDGE_EVER_RUNTIME?: string;
+  EDGE_EVER_AUTO_CLASSIFY_WORKSPACE?: string;
   EDGE_EVER_CONTAINER_IMAGE?: string;
   EDGE_EVER_DEPLOYMENT_TRIGGER?: string;
   EDGE_EVER_DEPLOYMENT_METHOD?: string;

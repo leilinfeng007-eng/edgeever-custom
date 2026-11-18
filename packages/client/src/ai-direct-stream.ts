@@ -1,3 +1,7 @@
+/**
+ * 客户端流式生成：消费供应商事件、规范化结果边界并发出 start/text-delta/error/finish。
+ * 空结果、截断与异常按下方事件分支处理；仅明确输出额度被拒时允许同供应商降额度重试一次。
+ */
 import type { AiAttachmentInput, AiDirectTarget, AiPreparedGeneration, AiStreamEvent } from "@edgeever/shared";
 import {
   buildAiDirectProviderRequest,
@@ -77,6 +81,7 @@ export const streamDirectAiGeneration = async (
     hasContent ||= Boolean(trailingText.trim());
     options.onEvent({ type: "text-delta", text: trailingText });
   }
+  // 规范化后仍为空则发出错误，不把空文本当作成功笔记；流截断保留草稿，由调用方决定续写。
   if (!hasContent) {
     options.onEvent({
       type: "error",

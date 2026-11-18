@@ -4,7 +4,7 @@ import {
   isProtectedDemoAccount,
   resolveDemoPasswordHash,
   shouldUpsertDemoSeedRecord,
-} from "../apps/api/src/demo-mode";
+} from "../apps/api/src/workspace/demo-mode";
 
 describe("demo mode policy", () => {
   test("only enables demo policy for an explicit true value", () => {

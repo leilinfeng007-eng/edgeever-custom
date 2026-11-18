@@ -8,11 +8,11 @@ export const CONTRIBUTORS_START_MARKER = "<!-- readme-contributors:start -->";
 export const CONTRIBUTORS_END_MARKER = "<!-- readme-contributors:end -->";
 
 export const README_CONTRIBUTOR_SECTIONS = [
-  { file: "README.md", heading: "## Contributors" },
-  { file: "README.zh-CN.md", heading: "## 贡献者" },
-  { file: "README.zh-TW.md", heading: "## 貢獻者" },
-  { file: "README.ja.md", heading: "## コントリビューター" },
-  { file: "README.pl-PL.md", heading: "## Współtwórcy" },
+  { file: "docs/readme/README.md", heading: "## Contributors" },
+  { file: "docs/readme/README.zh-CN.md", heading: "## 贡献者" },
+  { file: "docs/readme/README.zh-TW.md", heading: "## 貢獻者" },
+  { file: "docs/readme/README.ja.md", heading: "## コントリビューター" },
+  { file: "docs/readme/README.pl-PL.md", heading: "## Współtwórcy" },
 ];
 
 const isBotLogin = (login) =>
@@ -309,7 +309,7 @@ export const syncReadmeContributors = ({
   ghJson,
   sidebarJson,
 } = {}) => {
-  const primaryReadmePath = resolve(repositoryRoot, "README.md");
+  const primaryReadmePath = resolve(repositoryRoot, "docs/readme/README.md");
   const existingContributors = existsSync(primaryReadmePath)
     ? parseExistingReadmeContributors(readFileSync(primaryReadmePath, "utf8"))
     : [];

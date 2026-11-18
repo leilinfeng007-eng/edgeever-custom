@@ -2,14 +2,15 @@ import { Database } from "bun:sqlite";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hasBootstrapCredential } from "../apps/api/src/auth-bootstrap.ts";
-import { isUnauthenticatedAccessEnabled } from "../apps/api/src/auth-state.ts";
+import { hasBootstrapCredential } from "../apps/api/src/auth/auth-bootstrap.ts";
+import { isUnauthenticatedAccessEnabled } from "../apps/api/src/auth/auth-state.ts";
 import { isEdgeEverAppPath } from "../apps/api/src/app-paths.ts";
+import { startInboxClassification } from "../apps/api/src/ai/inbox-classification.ts";
 import { fetchEdgeEverApp } from "../apps/api/src/index.ts";
-import { isNotebookSitePagePath, renderNotebookSitePage } from "../apps/api/src/notebook-site-page.ts";
-import { isPublicMemoSharePagePath, renderPublicMemoSharePage } from "../apps/api/src/share-page.ts";
-import { nodePublicFetch } from "../apps/api/src/node-public-network.ts";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter.ts";
+import { isNotebookSitePagePath, renderNotebookSitePage } from "../apps/api/src/notes/notebook-site-page.ts";
+import { isPublicMemoSharePagePath, renderPublicMemoSharePage } from "../apps/api/src/notes/share-page.ts";
+import { nodePublicFetch } from "../apps/api/src/common/node-public-network.ts";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter.ts";
 import { resolveSelfHostedConfig } from "./self-hosted-config.mjs";
 import { ensureSelfHostedCredentialSecrets, loadSelfHostedEnvironment } from "./self-hosted-secrets.mjs";
 import { serveSelfHostedStatic } from "./self-hosted-static.mjs";
@@ -70,7 +71,7 @@ await ensureSelfHostedCredentialSecrets(dataDirectory, runtimeEnvironment, { gen
 
 const storage = config.storageBackend === "s3"
   ? (
-      await import("../apps/api/src/s3-compatible-storage-adapter.ts")
+      await import("../apps/api/src/storage/s3-compatible-storage-adapter.ts")
     ).createS3CompatibleStorageAdapter(sqlite, {
         bucket: runtimeEnvironment.EDGE_EVER_S3_BUCKET ?? "",
         region: runtimeEnvironment.EDGE_EVER_S3_REGION,
@@ -87,6 +88,7 @@ const env = {
   publicNetworkFetch: nodePublicFetch,
   EDGE_EVER_AUTH_USERNAME: runtimeEnvironment.EDGE_EVER_AUTH_USERNAME ?? "admin",
   EDGE_EVER_RUNTIME: "self-hosted-bun",
+  EDGE_EVER_AUTO_CLASSIFY_WORKSPACE: runtimeEnvironment.EDGE_EVER_AUTO_CLASSIFY_WORKSPACE,
   EDGE_EVER_CONTAINER_IMAGE: runtimeEnvironment.EDGE_EVER_CONTAINER_IMAGE,
   EDGE_EVER_DEPLOYMENT_TRIGGER: runtimeEnvironment.EDGE_EVER_DEPLOYMENT_TRIGGER,
   EDGE_EVER_DEPLOYMENT_METHOD: runtimeEnvironment.EDGE_EVER_DEPLOYMENT_METHOD,
@@ -139,6 +141,8 @@ const server = Bun.serve({
   },
 });
 
+const stopInboxClassification = startInboxClassification(env);
+
 console.log(`[self-hosted] listening on ${server.url}`);
 console.log(`[self-hosted] data directory: ${dataDirectory}`);
 console.log(`[self-hosted] storage backend: ${config.storageBackend}`);
@@ -151,6 +155,7 @@ const shutdown = async (signal) => {
   console.log(`[self-hosted] received ${signal}; shutting down`);
 
   try {
+    await stopInboxClassification?.();
     await server.stop();
     sqlite.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     sqlite.close();

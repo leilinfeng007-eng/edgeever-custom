@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { createCloudflareStorageAdapter } from "../apps/api/src/cloudflare-storage-adapter";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter";
-import { SELF_HOSTED_DATABASE_DIALECT } from "../apps/api/src/self-hosted-storage-adapter";
-import { createS3CompatibleStorageAdapter } from "../apps/api/src/s3-compatible-storage-adapter";
+import { createCloudflareStorageAdapter } from "../apps/api/src/storage/cloudflare-storage-adapter";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter";
+import { SELF_HOSTED_DATABASE_DIALECT } from "../apps/api/src/storage/self-hosted-storage-adapter";
+import { createS3CompatibleStorageAdapter } from "../apps/api/src/storage/s3-compatible-storage-adapter";
 
 describe("storage adapter", () => {
   test("wraps Cloudflare bindings without changing their identity", () => {

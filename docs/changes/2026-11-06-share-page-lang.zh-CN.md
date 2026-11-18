@@ -17,7 +17,7 @@
 
 ## 验证
 
-- `apps/api/src/share-page.test.mjs` 新增回归测试，覆盖这些属性以及无标题时的默认标题。
+- `apps/api/src/notes/share-page.test.mjs` 新增回归测试，覆盖这些属性以及无标题时的默认标题。
 - 使用本分支的自托管构建，通过 `curl` 检查了分享链接的首个 HTML 响应。
 
 ## 回滚

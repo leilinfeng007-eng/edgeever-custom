@@ -137,7 +137,7 @@ describe("native release planning", () => {
     expect(
       planNativeRelease("desktop", [
         "migrations/0053_collapse_duplicate_inbox_notebooks.sql",
-        "apps/api/src/notebook-service.test.mjs",
+        "apps/api/src/notes/notebook-service.test.mjs",
       ]),
     ).toEqual({
       rebuild: true,

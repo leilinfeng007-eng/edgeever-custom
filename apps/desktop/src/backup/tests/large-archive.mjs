@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 const root = process.cwd();
 const { fetchEdgeEverApp } = await import(join(root, "apps/api/src/index.ts"));
-const { createSelfHostedStorageAdapter } = await import(join(root, "apps/api/src/self-hosted-storage-adapter.ts"));
+const { createSelfHostedStorageAdapter } = await import(join(root, "apps/api/src/storage/self-hosted-storage-adapter.ts"));
 const { createEdgeEverClient } = await import(join(root, "packages/client/src/index.ts"));
 const directory = await mkdtemp(join(tmpdir(), "edgeever-backup-large-")); const servers = []; const dbs = []; const children = [];
 const create = async (name) => {

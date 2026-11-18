@@ -21,6 +21,7 @@ import {
 } from "@edgeever/shared";
 import { throwIfAborted } from "./abort-signal";
 import { createClientAiModel } from "./ai-model";
+import { createClientUuid } from "./client-id";
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" ? value as Record<string, unknown> : null;
@@ -194,7 +195,7 @@ export const streamDirectCompanion = async (
         execute: async (input: unknown) => {
           sealProcess();
           const pending: CompanionToolCall = {
-            id: crypto.randomUUID(), name: definition.name, status: "running", effects: [],
+            id: createClientUuid(), name: definition.name, status: "running", effects: [],
           };
           tools = [...tools, pending];
           options.onEvent({ type: "tools", tools, todos, questions });

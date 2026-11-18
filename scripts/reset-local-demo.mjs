@@ -4,8 +4,8 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchEdgeEverApp } from "../apps/api/src/index.ts";
-import { createCloudflareStorageAdapter } from "../apps/api/src/cloudflare-storage-adapter.ts";
-import { DEMO_SEED_MEMO_IDS, DEMO_SEED_NOTEBOOK_IDS } from "../apps/api/src/demo-seed-data.ts";
+import { createCloudflareStorageAdapter } from "../apps/api/src/storage/cloudflare-storage-adapter.ts";
+import { DEMO_SEED_MEMO_IDS, DEMO_SEED_NOTEBOOK_IDS } from "../apps/api/src/workspace/demo-seed-data.ts";
 import { findLocalD1DatabasePaths } from "./local-dev.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");

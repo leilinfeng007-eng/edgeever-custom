@@ -1,6 +1,10 @@
-import { servePublicDemoRequest } from "./public-demo-page";
+/**
+ * API 组合入口：注册 Hono 中间件、REST 与 /mcp，统一注入工作区身份和存储。
+ * Worker 默认导出和自托管 fetchEdgeEverApp 共用业务应用；模块迁移不要改变注册顺序。
+ */
+import { servePublicDemoRequest } from "./workspace/public-demo-page";
 import { isEdgeEverAppPath } from "./app-paths";
-import { isDatabaseDailyQuotaError } from "./database-errors";
+import { isDatabaseDailyQuotaError } from "./storage/database-errors";
 import {
   createExcerpt,
   docToText,
@@ -8,7 +12,7 @@ import {
   normalizeTags,
 } from "@edgeever/shared";
 import { Hono } from "hono";
-import { registerImportContextGuard, registerImportRoutes } from "./import-routes";
+import { registerImportContextGuard, registerImportRoutes } from "./notes/import-routes";
 import { cors } from "hono/cors";
 import { resolveContainerImageSource } from "./container-image-source";
 import apiProbe from "../../../docs/openapi.json";
@@ -25,15 +29,15 @@ import {
   setSessionCookie,
   tooManyLoginAttempts,
   verifyLogin,
-} from "./auth-service";
+} from "./auth/auth-service";
 import {
   isDatabaseNotReadyError,
-} from "./auth-state";
+} from "./auth/auth-state";
 import {
   isDemoModeEnabled,
   resolveDemoPasswordHash,
   shouldUpsertDemoSeedRecord,
-} from "./demo-mode";
+} from "./workspace/demo-mode";
 import {
   decodeDemoAttachment,
   DEMO_SEED_ATTACHMENT_RESOURCES,
@@ -42,66 +46,68 @@ import {
   DEMO_SEED_NOTEBOOK_IDS,
   DEMO_SEED_NOTEBOOKS,
   DEMO_SEED_REVISIONS,
-} from "./demo-seed-data";
-import { createCloudflareStorageAdapter } from "./cloudflare-storage-adapter";
+} from "./workspace/demo-seed-data";
+import { createCloudflareStorageAdapter } from "./storage/cloudflare-storage-adapter";
 import {
   restoreJsonMemos as restoreJsonMemosService,
   restoreJsonNotebooks as restoreJsonNotebooksService,
-} from "./backup-service";
-import { sha256, sha256Bytes } from "./hash-utils";
+} from "./backup/backup-service";
+import { sha256, sha256Bytes } from "./common/hash-utils";
 import { PUBLIC_PAGE_HEADERS } from "@edgeever/shared/public-page-headers";
 import { INSTANCE_BUILD_ID } from "./instance-build";
 import { resolveDeploymentVersionCreatedAt, resolveImageBuildMetadata, resolveInstanceDeploymentMetadata } from "./instance-deployment";
 import type {
   DatabaseAdapter,
   PreparedStatementAdapter,
-} from "./storage-contract";
+} from "./storage/storage-contract";
 import type { AppContext, AppEnv, AuthContext, Bindings, WorkerBindings } from "./api-context";
-import { AppError } from "./app-error";
-import { hashPassword } from "./auth-crypto";
+import { AppError } from "./common/app-error";
+import { hashPassword } from "./auth/auth-crypto";
 import {
   apiError,
   authNotConfigured,
   databaseNotReady,
   httpExceptionError,
   unauthorized,
-} from "./http-errors";
-import { audit } from "./audit";
-import { clampNumber, createId, isoNow } from "./entity-utils";
+} from "./common/http-errors";
+import { audit } from "./common/audit";
+import { clampNumber, createId, isoNow } from "./common/entity-utils";
 import {
   upsertMemoSearchDocumentStatement,
-} from "./memo-search-index";
+} from "./notes/memo-search-index";
 import {
   listMemoRevisions as listMemoRevisionsService,
   restoreMemoRevision as restoreMemoRevisionService,
-} from "./memo-revision-service";
-import { registerTagRoutes } from "./tag-routes";
-import { registerTemplateRoutes } from "./template-routes";
-import { registerAuthRoutes } from "./auth-routes";
-import { registerApiTokenRoutes } from "./api-token-routes";
-import { registerObjectStorageRoutes } from "./object-storage-routes";
-import { registerAiRoutes } from "./ai-routes";
-import { registerPluginCapabilityRoutes } from "./plugin-capability-routes";
-import { registerCompanionRoutes } from "./companion-routes";
-import { registerAiPromptRoutes } from "./ai-prompt-routes";
-import { registerResourceRoutes } from "./resource-routes";
-import { registerPublicPublishImageRoutes, registerPublishImageRoutes } from "./publish-image-routes";
+} from "./notes/memo-revision-service";
+import { registerTagRoutes } from "./notes/tag-routes";
+import { registerTemplateRoutes } from "./notes/template-routes";
+import { registerAuthRoutes } from "./auth/auth-routes";
+import { registerApiTokenRoutes } from "./auth/api-token-routes";
+import { registerObjectStorageRoutes } from "./storage/object-storage-routes";
+import { registerAiRoutes } from "./ai/ai-routes";
+import { registerPluginCapabilityRoutes } from "./plugins/plugin-capability-routes";
+import { registerCompanionRoutes } from "./ai/companion-routes";
+import { registerAiPromptRoutes } from "./ai/ai-prompt-routes";
+import { registerResourceRoutes } from "./attachments/resource-routes";
+import { registerPublicPublishImageRoutes, registerPublishImageRoutes } from "./attachments/publish-image-routes";
 import {
   abortResourceUpload,
   completeResourceUpload,
   initiateResourceRestoreUpload,
   initiateResourceUpload,
   uploadResourcePart,
-} from "./resource-upload-service";
-import { registerPluginDistributionRoutes } from "./plugin-distribution-routes";
-import { registerPosterRenderRoutes } from "./poster-render-routes";
-import { registerSyncRoutes } from "./sync-routes";
-import { registerMemoRoutes } from "./memo-routes";
-import { registerScheduledTaskRoutes } from "./scheduled-task-routes";
-import { registerWorkspaceExtensionRoutes } from "./workspace-extension-routes";
-import { registerBackupRoutes } from "./backup-routes";
-import { registerMcpRoutes } from "./mcp-routes";
-import { executeWorkspaceTool } from "./mcp-tool-executor";
+} from "./attachments/resource-upload-service";
+import { registerPluginDistributionRoutes } from "./plugins/plugin-distribution-routes";
+import { registerPosterRenderRoutes } from "./notes/poster-render-routes";
+import { registerSyncRoutes } from "./sync/sync-routes";
+import { registerMemoRoutes } from "./notes/memo-routes";
+import { registerAttachmentContentRoute } from "./attachments/attachment-content-routes";
+import { registerInboxClassificationRoutes } from "./ai/inbox-classification-routes";
+import { registerScheduledTaskRoutes } from "./tasks/scheduled-task-routes";
+import { registerWorkspaceExtensionRoutes } from "./plugins/workspace-extension-routes";
+import { registerBackupRoutes } from "./backup/backup-routes";
+import { registerMcpRoutes } from "./mcp/mcp-routes";
+import { executeWorkspaceTool } from "./mcp/mcp-tool-executor";
 import {
   createMemoEditSession,
   createMemoRecord,
@@ -115,36 +121,36 @@ import {
   moveMemosRecord,
   restoreMemoRecord,
   updateMemoRecord,
-} from "./memo-service";
-import { duplicateMemoRecord } from "./memo-duplicate-service";
+} from "./notes/memo-service";
+import { duplicateMemoRecord } from "./notes/memo-duplicate-service";
 
 export { createMemoEditSession, mergeMemosRecord, updateMemoRecord };
-import { listMemos } from "./memo-list-service";
+import { listMemos } from "./notes/memo-list-service";
 import {
   registerUserRoutes,
-} from "./user-routes";
-import { registerNotebookRoutes } from "./notebook-routes";
-import { registerNotebookShareRoutes, registerPublicNotebookShareRoutes } from "./notebook-share-routes";
-import { isNotebookSitePagePath, renderNotebookSitePage } from "./notebook-site-page";
-import { isPublicMemoSharePagePath, renderPublicMemoSharePage } from "./share-page";
-import { registerMemoShareRoutes, registerPublicShareRoutes } from "./share-routes";
-import { registerPublicTableFormRoutes, registerTableFormRoutes } from "./table-form-routes";
-import { registerPublicPendingResourceRoutes } from "./pending-resource-routes";
+} from "./auth/user-routes";
+import { registerNotebookRoutes } from "./notes/notebook-routes";
+import { registerNotebookShareRoutes, registerPublicNotebookShareRoutes } from "./notes/notebook-share-routes";
+import { isNotebookSitePagePath, renderNotebookSitePage } from "./notes/notebook-site-page";
+import { isPublicMemoSharePagePath, renderPublicMemoSharePage } from "./notes/share-page";
+import { registerMemoShareRoutes, registerPublicShareRoutes } from "./notes/share-routes";
+import { registerPublicTableFormRoutes, registerTableFormRoutes } from "./notes/table-form-routes";
+import { registerPublicPendingResourceRoutes } from "./attachments/pending-resource-routes";
 import {
   deleteStoredObjects,
   getActiveObjectStorageConfig,
-} from "./object-storage";
-import { ensureWorkspaceExampleSeed } from "./workspace-example-seed";
+} from "./storage/object-storage";
+import { ensureWorkspaceExampleSeed } from "./workspace/workspace-example-seed";
 import {
   DEFAULT_WORKSPACE_ID,
   ensureUserWorkspace,
-} from "./workspace-provisioning";
+} from "./workspace/workspace-provisioning";
 import {
   createAttachmentResource,
   createImageResource,
   getResourceRow,
   replaceResourceContent,
-} from "./resource-service";
+} from "./attachments/resource-service";
 
 // Compatibility aliases keep the existing SQL-heavy implementation small
 // while routing its dependency through the platform-neutral contract above.
@@ -342,6 +348,8 @@ app.use("/api/v1/*", async (c, next) => {
 });
 
 registerImportContextGuard(app);
+registerInboxClassificationRoutes(app);
+registerAttachmentContentRoute(app);
 
 registerObjectStorageRoutes(app, {
   isDemoMode: (...args) => isDemoMode(...args),

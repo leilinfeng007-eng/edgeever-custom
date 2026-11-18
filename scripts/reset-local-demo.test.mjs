@@ -3,8 +3,8 @@ import { Database } from "bun:sqlite";
 import { globSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter.ts";
-import { DEMO_SEED_MEMOS, DEMO_SEED_ATTACHMENT_RESOURCES } from "../apps/api/src/demo-seed-data.ts";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter.ts";
+import { DEMO_SEED_MEMOS, DEMO_SEED_ATTACHMENT_RESOURCES } from "../apps/api/src/workspace/demo-seed-data.ts";
 import { createLocalDevelopmentSession } from "./local-dev-auth.mjs";
 import { assertLocalResetPath, restoreLocalDemoData } from "./reset-local-demo.mjs";
 

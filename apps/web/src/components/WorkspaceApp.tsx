@@ -23,6 +23,7 @@ import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import * as m from "motion/react-m";
 import { MemoListPane, MemoSelectionActionBar } from "./MemoListPane";
+import { InboxClassificationPanel } from "./InboxClassificationPanel";
 import { MobileBottomNav, MobileNotebookPicker } from "./WorkspaceMobileChrome";
 import { QuickMemoSwitcher } from "./QuickMemoSwitcher";
 import { AppConfirmDialog, MemoDeleteConfirmDialog, NotebookNameDialog } from "./dialogs/ConfirmDialogs";
@@ -109,6 +110,7 @@ import { shouldAcceptRemoteMemoDetail } from "@/lib/memo-detail-freshness";
 import {
   clearLocalScope,
   createLocalDataScope,
+  isLocalMemoId,
   putLocalMemo,
   putLocalNotebook,
 } from "@/lib/local-mirror";
@@ -660,6 +662,10 @@ export const WorkspaceApp = ({
       invalidateWorkspaceQueries,
     });
   }, [invalidateWorkspaceQueries, repository, runQueuedSync, syncSummary.total]);
+
+  const refreshAfterClassification = useCallback(() => {
+    void refreshWorkspaceFromServer("background").catch(() => {});
+  }, [refreshWorkspaceFromServer]);
 
   const noteImport = useNoteImport(authRequired ? user?.id ?? null : null, user?.displayName || user?.username || "Local", async () => { await refreshWorkspaceFromServer("manual"); });
 
@@ -3543,6 +3549,16 @@ export const WorkspaceApp = ({
             )}
           >
             <MemoListPane
+              classification={memoView === "notebook" && !selectedTag && !demoMode ? (
+                <InboxClassificationPanel
+                  key={selectedMemoId ?? "inbox"}
+                  inbox={Boolean(selectedNotebook && (selectedNotebook.slug === "inbox" ||
+                    selectedNotebook.id === "nb_inbox" || selectedNotebook.id.endsWith("_inbox")))}
+                  memoId={selectedMemoId && !isLocalMemoId(selectedMemoId) ? selectedMemoId : null}
+                  workspaceKey={localDataScope}
+                  onChanged={refreshAfterClassification}
+                />
+              ) : undefined}
               notebook={selectedTag ? null : selectedNotebook}
               selectedTag={selectedTag}
               notebooks={notebooks}

@@ -6,4 +6,4 @@
 
 The archive contains one notebook, one pinned/tagged note, one historical revision, a PNG, an inert SVG, an image with null MIME, and a downloadable HTML attachment. The null-MIME image uses a `.bin` filename to exercise the existing binary fallback without file-extension MIME inference. It has no credentials, user data, scripts, or external requests. The security regression test restores this frozen archive through both legacy and resumable APIs and reads the resulting data and bytes back.
 
-Run: `bun test apps/api/src/resource-restore-security.test.mjs`.
+Run: `bun test apps/api/src/attachments/resource-restore-security.test.mjs`.

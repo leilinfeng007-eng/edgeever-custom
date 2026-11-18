@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fetchEdgeEverApp } from "../apps/api/src/index.ts";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter.ts";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter.ts";
 import { registerAttachmentOpenIpc } from "../apps/desktop/src/main/attachment-open.mjs";
 import { createAttachmentWritebackManager, replaceAttachmentResource } from "../apps/desktop/src/main/attachment-writeback.mjs";
 

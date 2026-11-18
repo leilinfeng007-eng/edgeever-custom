@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Database } from "bun:sqlite";
 import { z } from "zod";
 import { createExcerpt } from "../packages/shared/src/content.ts";
-import { escapeLike, toFtsQuery } from "../apps/api/src/memo-list-service.ts";
+import { escapeLike, toFtsQuery } from "../apps/api/src/notes/memo-list-service.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const db = new Database(":memory:");

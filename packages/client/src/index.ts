@@ -94,6 +94,21 @@ import type {
   PluginPublicFetchResponse,
 } from "@edgeever/shared";
 
+export { createClientUuid } from "./client-id";
+
+export type InboxClassificationStatus = {
+  status: "pending" | "running" | "retained" | "moved" | null;
+  outcome: string | null;
+  attempts: number;
+  reason: string | null;
+  destinationId: string | null;
+  destinationName: string | null;
+  notebookId: string;
+  inInbox: boolean;
+  canApply: boolean;
+  canUndo: boolean;
+};
+
 export const MAX_SINGLE_REQUEST_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export type EdgeEverClientRequestContext = {
@@ -1611,6 +1626,16 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
         method: "DELETE",
       }),
 
+    getInboxClassificationCapability: () =>
+      request<{ enabled: boolean }>("/api/v1/inbox-classification"),
+    getInboxClassification: (memoId: string, signal?: AbortSignal) =>
+      request<InboxClassificationStatus>(`/api/v1/inbox-classification/${encodeURIComponent(memoId)}`, { signal }),
+    runInboxClassificationAction: (memoId: string, action: "queue" | "apply" | "undo") =>
+      request<{ ok: true }>(`/api/v1/inbox-classification/${encodeURIComponent(memoId)}/${action}`, { method: "POST" }),
+    readAttachmentText: (memoId: string, resourceId: string, offset: number, signal?: AbortSignal) =>
+      request<{ text: string; nextOffset: number | null }>(
+        `/api/v1/attachment-content/${encodeURIComponent(memoId)}/${encodeURIComponent(resourceId)}?offset=${offset}`, { signal },
+      ),
     getMemo: (memoId: string, options?: { includeDeleted?: boolean }) => {
       const search = new URLSearchParams();
 

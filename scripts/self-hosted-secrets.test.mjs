@@ -10,8 +10,8 @@ import {
 import {
   decryptAiCredential,
   resolvePrimaryAiCredentialEncryptionKey,
-} from "../apps/api/src/ai-service.ts";
-import { encryptSecret } from "../apps/api/src/secret-encryption.ts";
+} from "../apps/api/src/ai/ai-service.ts";
+import { encryptSecret } from "../apps/api/src/auth/secret-encryption.ts";
 
 const makeDataDirectory = async () => mkdtemp(`${tmpdir()}/edgeever-secrets-`);
 

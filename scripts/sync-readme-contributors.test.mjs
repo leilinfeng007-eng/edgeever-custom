@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -91,6 +91,7 @@ describe("README contributors wall sync", () => {
   test("appends and idempotently updates the contributors section across all five READMEs", () => {
     const tempRoot = mkdtempSync(join(tmpdir(), "edgeever-readme-contributors-"));
     try {
+      mkdirSync(join(tempRoot, "docs/readme"), { recursive: true });
       for (const { file } of README_CONTRIBUTOR_SECTIONS) {
         writeFileSync(join(tempRoot, file), `# EdgeEver\n\nBody for ${file}\n`);
       }
@@ -121,7 +122,7 @@ describe("README contributors wall sync", () => {
       });
       expect(thirdRun.updatedFiles).toHaveLength(README_CONTRIBUTOR_SECTIONS.length);
 
-      const zhReadme = readFileSync(join(tempRoot, "README.zh-CN.md"), "utf8");
+      const zhReadme = readFileSync(join(tempRoot, "docs/readme/README.zh-CN.md"), "utf8");
       expect(zhReadme).toContain("## 贡献者");
       expect(zhReadme).toContain(CONTRIBUTORS_START_MARKER);
       expect(zhReadme).toContain(CONTRIBUTORS_END_MARKER);

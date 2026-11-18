@@ -3,7 +3,7 @@ import {
   isDatabaseNotReadyError,
   isUnauthenticatedAccessEnabled,
   resolveInstanceAuthMode,
-} from "../apps/api/src/auth-state";
+} from "../apps/api/src/auth/auth-state";
 
 describe("instance authentication state", () => {
   test("fails closed when production has neither credentials nor users", () => {

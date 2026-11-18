@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { buildWelcomeMemoContent, WELCOME_MEMO_REPAIRED_CONTENT_HASH } from "../packages/shared/src/default-workspace-seeds";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter";
-import { ensureUserWorkspace } from "../apps/api/src/workspace-provisioning";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter";
+import { ensureUserWorkspace } from "../apps/api/src/workspace/workspace-provisioning";
 import { createLocalDevelopmentSession } from "../scripts/local-dev-auth.mjs";
 
 const repairPath = "migrations/0071_fix_welcome_memo_markdown.sql";

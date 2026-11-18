@@ -6,9 +6,9 @@
 
 ## 文档约束
 
-- **技术栈与背景**：优先参考 `README.md`。
+- **技术栈与背景**：优先参考根目录 `README.md` 导航，完整技术栈与背景见 `docs/readme/README.md` 和 `docs/readme/README.zh-CN.md`。
 - **移动端平台边界**：Android 客户端位于 `apps/mobile`，使用 Expo / React Native 实现；iOS 客户端位于 `apps/ios`，使用 Swift / SwiftUI 原生实现。
-- **双语同步**：修改中文文档时必须同步更新对应的英文文档。修改根目录 README 时必须同步 `README.md`、`README.zh-CN.md`、`README.zh-TW.md`、`README.es.md`、`README.de.md`、`README.fr.md`、`README.ja.md`、`README.pl-PL.md`、`README.ru.md`。
+- **双语同步**：修改中文文档时必须同步更新对应的英文文档。修改根目录 `README.md` 或完整产品说明时必须同步 `docs/readme/` 下的 `README.md`、`README.zh-CN.md`、`README.zh-TW.md`、`README.es.md`、`README.de.md`、`README.fr.md`、`README.ja.md`、`README.pl-PL.md`、`README.ru.md`；根目录 README 保留项目入口、快速开始、语言切换与文档导航。
   - **内部巡检细则例外**：`docs/agent-issue-patrol.zh-CN.md` 和 `docs/agent-pr-review.zh-CN.md` 仅维护中文版，不创建英文副本。
 
 ## 变更风险评估
