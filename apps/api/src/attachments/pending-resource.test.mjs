@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sha256 } from "../common/hash-utils.ts";
 import { fetchEdgeEverApp } from "../index.ts";
+import { processInboxClassification } from "../ai/inbox-classification.ts";
 import { MCP_TOOLS } from "../mcp/mcp-tools.ts";
 import { COMPANION_MCP_TOOLS } from "../ai/companion-tool-catalog.ts";
 import { createSelfHostedStorageAdapter } from "../storage/self-hosted-storage-adapter.ts";
@@ -111,7 +112,7 @@ const createInstance = async (scopes = ALL_SCOPES) => {
     return { ticket, uploaded: await response.json() };
   };
   const count = (sql, ...values) => sqlite.query(sql).get(...values).count;
-  return { sqlite, resourcesDirectory, fetchApp, callTool, issue, upload, count, faults, useFaultyDb };
+  return { sqlite, resourcesDirectory, fetchApp, callTool, issue, upload, count, faults, useFaultyDb, environment };
 };
 
 const put = (fetchApp, ticket, body, headers = {}) => fetchApp(ticket.uploadUrl, {
@@ -136,6 +137,76 @@ const pausedBody = (bytes) => {
 
 const errorText = (result) => result.content?.map((item) => item.text).join("\n") ?? "";
 const fileExists = (path) => stat(path).then(() => true, () => false);
+
+describe("MCP prose writing", () => {
+  test("selects the workspace template, checks inline positions, then files the bound note", async () => {
+    const { sqlite, callTool, environment } = await createInstance();
+    await callTool("create_note_template", {
+      name: "AI 对话通用模板", contentMarkdown: "## 结论或当前状态", tags: ["AI沉淀"],
+    });
+    const selected = await callTool("select_note_template", { purpose: "general" });
+    expect(selected.structuredContent.template.name).toBe("AI 对话通用模板");
+    expect((await callTool("select_note_template", { purpose: "meeting" })).structuredContent.template.tags).toContain("meeting");
+    expect((await callTool("select_note_template", { purpose: "verbatim" })).structuredContent.template).toBeNull();
+
+    const image = (await callTool("stage_memo_resource", {
+      kind: "image", filename: "alert.png", mimeType: "image/png", dataBase64: PNG.toString("base64"),
+    })).structuredContent;
+    const document = (await callTool("stage_memo_resource", {
+      kind: "attachment", filename: "approval.txt", mimeType: "text/plain",
+      dataBase64: Buffer.from("approval steps").toString("base64"),
+    })).structuredContent;
+    const markdown = `## 告警现象\n\n${image.markdownImage}\n\n## 审批方案\n\n${document.markdownLink}`;
+    const args = { title: "接口审批方案", templateId: selected.structuredContent.template.id,
+      resourceIds: [image.resourceId, document.resourceId] };
+    const rejected = await callTool("create_memo", { ...args, contentMarkdown: "# 没有图片位置" });
+    expect(rejected.structuredContent.error.code).toBe("attachment_position_required");
+    const created = await callTool("create_memo", { ...args, contentMarkdown: markdown });
+    expect(created.isError).toBe(false);
+    const { memo, resources, appliedTemplateId } = created.structuredContent;
+    expect(appliedTemplateId).toBe(args.templateId);
+    expect(memo.notebookId).toBe("nb_inbox");
+    expect(memo.contentMarkdown).toBe(markdown);
+    expect(memo.contentJson.content.flatMap(node => node.content ?? []).some(node => node.type === "edgeeverFileAttachment")).toBe(true);
+    expect(memo.tags).toContain("AI沉淀");
+    expect(resources.map(resource => resource.id)).toEqual(expect.arrayContaining(args.resourceIds));
+
+    sqlite.query("UPDATE inbox_classification_jobs SET available_at = 0 WHERE memo_id = ?").run(memo.id);
+    await processInboxClassification(environment, new AbortController().signal, async ({ note }) => {
+      expect(note.attachments.map(resource => resource.filename)).toEqual(expect.arrayContaining(["alert.png", "approval.txt"]));
+      return { notebookId: "nb_projects", tags: [] };
+    });
+    const filed = (await callTool("get_memo", { memoId: memo.id })).structuredContent.memo;
+    expect(filed.notebookId).toBe("nb_projects");
+    const lost = await callTool("update_memo", { memoId: memo.id, expectedRevision: filed.revision, contentMarkdown: "new content" });
+    expect(lost.structuredContent.error.code).toBe("attachment_reference_removed");
+    const updated = await callTool("update_memo", {
+      memoId: memo.id, expectedRevision: filed.revision, contentMarkdown: markdown + "\n\n已补充审批条件。",
+    });
+    expect(updated.structuredContent.memo).toMatchObject({ id: memo.id, notebookId: "nb_inbox" });
+    expect((await callTool("list_memo_resources", { memoId: memo.id })).structuredContent.resources).toHaveLength(2);
+  });
+
+  test("reuses an exact note, honors explicit destinations, and preserves a held inbox note", async () => {
+    const { sqlite, callTool } = await createInstance();
+    const args = { title: "接口记录", contentMarkdown: "采取了紧急回退。" };
+    const note = (await callTool("create_memo", args)).structuredContent.memo;
+    const again = (await callTool("create_memo", args)).structuredContent;
+    expect(again).toMatchObject({ reused: true, memo: { id: note.id, revision: note.revision } });
+    const destination = (await callTool("create_memo", { ...args, notebookId: "nb_uploads" })).structuredContent.memo;
+    expect(destination.notebookId).toBe("nb_uploads");
+
+    const held = (await callTool("create_memo", {
+      title: "可能是旧记录的补充", contentMarkdown: "待合并", autoClassify: false,
+    })).structuredContent.memo;
+    const result = await callTool("update_memo", { memoId: held.id, contentMarkdown: "补充证据待合并" });
+    expect(result.structuredContent.memo.notebookId).toBe("nb_inbox");
+    const job = (id) => sqlite.query("SELECT status, outcome FROM inbox_classification_jobs WHERE memo_id = ?").get(id);
+    expect(job(destination.id)).toBeNull();
+    expect(job(note.id)).toMatchObject({ status: "pending" });
+    expect(job(held.id)).toMatchObject({ status: "retained", outcome: "explicit_location" });
+  });
+});
 
 describe("pending resource uploads", () => {
   test("uploads a file without a memo, then creates the memo and binds it in one operation", async () => {

@@ -1,3 +1,4 @@
+import { noteTemplatePurposes } from "./mcp-note-template";
 /**
  * MCP 公开工具目录：集中声明工具名、输入 schema、说明与能力标记。
  * 返回内容和错误封装见 mcp-routes；执行校验与工作区权限见 mcp-tool-service，不能仅依赖发现 schema。
@@ -213,13 +214,16 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "create_memo",
-    description: "Create a prose Markdown memo in a notebook. To include local files, upload them first with create_resource_upload_url, put the returned Markdown in contentMarkdown and pass their resourceIds. For an editable poster/海报笔记, use create_poster_memo instead; never substitute poster-style prose.",
+    description: "Save a completed prose note. Search for existing notes first. Read a clearly matching note and update it when adding material. If multiple notes might match, keep the new material in the inbox with autoClassify=false for review. For a new formatted note, call select_note_template, fill its structure, and pass templateId when provided. Omit notebookId unless the user chose a notebook. Stage files first, paste each returned Markdown snippet in its relevant section, and include its resourceId. Use References for note-wide original files. To save verbatim, keep the original text. For an editable poster, use create_poster_memo.",
     inputSchema: {
       type: "object",
-      required: ["notebookId"],
       additionalProperties: false,
       properties: {
-        notebookId: { type: "string" },
+        notebookId: { type: "string", minLength: 1, description: "Explicit user-selected notebook. Omit to start in the workspace inbox." },
+        autoClassify: { type: "boolean", description: "Defaults to true when no notebookId is supplied. Set false to keep in the inbox for review." },
+        allowDuplicate: { type: "boolean", description: "Allow a separate copy when the user explicitly requests one." },
+        templateId: { type: "string", minLength: 1, description: "Workspace template used to prepare the completed prose." },
+        requireResourcePlacement: { type: "boolean", description: "Set true when adding files to verify each resource appears in the submitted Markdown." },
         title: { type: "string" },
         contentMarkdown: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
@@ -230,7 +234,7 @@ const MCP_TOOL_DEFINITIONS = [
           maxItems: 20,
           uniqueItems: true,
           items: { type: "string" },
-          description: "Pending uploads from create_resource_upload_url to bind to this memo, in the same operation. Requires write:resources.",
+          description: "Pending uploads from stage_memo_resource or create_resource_upload_url to bind to this memo, in the same operation. Requires write:resources.",
         },
       },
     },
@@ -561,7 +565,7 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "update_memo",
-    description: "Update memo title, Markdown, tags, notebook, or pinned state, and bind pending uploads with resourceIds. To generate an editable poster/海报笔记, call create_poster_memo; to edit one, use get_poster then update_poster. Never manually encode poster source or replace a poster request with ordinary prose.",
+    description: "Update an existing prose note in place with its original structure and attachment references. Read get_memo first and pass its expectedRevision. Add new material and file snippets in the relevant section. Unless the user chose a notebook, omit notebookId so changed prose can return to the inbox for classification. Set autoClassify=false to retain its current location. To edit a poster use get_poster then update_poster.",
     inputSchema: {
       type: "object",
       required: ["memoId"],
@@ -572,7 +576,10 @@ const MCP_TOOL_DEFINITIONS = [
         isPinned: { type: "boolean" },
         contentMarkdown: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
-        notebookId: { type: "string" },
+        notebookId: { type: "string", minLength: 1, description: "Explicit user-selected destination." },
+        autoClassify: { type: "boolean", description: "Defaults to true for prose content changes with no explicit notebook. Set false to keep the current location." },
+        requireResourcePlacement: { type: "boolean", description: "Set true when adding files to verify each resource appears in the submitted Markdown." },
+        allowAttachmentReferenceRemoval: { type: "boolean", description: "Set only if the user explicitly asks to remove a reference from the body." },
         expectedRevision: { type: "integer", minimum: 0 },
         createdAt: { type: "string", format: "date-time" },
         updatedAt: { type: "string", format: "date-time" },
@@ -581,7 +588,7 @@ const MCP_TOOL_DEFINITIONS = [
           maxItems: 20,
           uniqueItems: true,
           items: { type: "string" },
-          description: "Pending uploads from create_resource_upload_url to bind to this memo, in the same operation. Requires write:resources.",
+          description: "Pending uploads from stage_memo_resource or create_resource_upload_url to bind to this memo, in the same operation. Requires write:resources.",
         },
       },
     },
@@ -709,6 +716,22 @@ const MCP_TOOL_DEFINITIONS = [
         mimeType: { type: "string", enum: ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/svg+xml"] },
         dataBase64: { type: "string" },
         alt: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "stage_memo_resource",
+    description: "Upload an original image or file (up to 2 MiB) through MCP before writing a note. Put the returned markdownImage or markdownLink in the matching section of the final note and bind resourceId with create_memo or update_memo. Use create_resource_upload_url for larger files.",
+    inputSchema: {
+      type: "object",
+      required: ["kind", "filename", "mimeType", "dataBase64"],
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", enum: ["image", "attachment"] },
+        filename: { type: "string", minLength: 1 },
+        mimeType: { type: "string", minLength: 1 },
+        dataBase64: { type: "string", minLength: 1, maxLength: 2796460 },
+        label: { type: "string", minLength: 1 },
       },
     },
   },
@@ -945,6 +968,18 @@ const MCP_TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "select_note_template",
+    description: "Select an editable workspace template before writing a new prose note. Choose by intended output: issue for a bug to reproduce or track, meeting for decisions and actions, progress for a period review, reading for article/book/course notes, idea for creative capture, goals for goal breakdown. Use general for mixed conversations, deployments, troubleshooting notes, or decisions. Use verbatim for original text. An explicitly requested templateId takes priority.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        purpose: { type: "string", enum: noteTemplatePurposes },
+        templateId: { type: "string", minLength: 1 },
+      },
+    },
+  },
+  {
     name: "get_note_template",
     description: "Get one reusable note template by its exact EdgeEver template ID.",
     inputSchema: {
@@ -1122,6 +1157,7 @@ const READ_ONLY_MCP_TOOLS = new Set([
   "list_tags",
   "get_workspace_stats",
   "list_note_templates",
+  "select_note_template",
   "get_note_template",
   "list_ai_instructions",
   "get_ai_instruction",
@@ -1138,6 +1174,7 @@ const NON_DESTRUCTIVE_MCP_TOOLS = new Set([
   "add_tags_to_memos",
   "upload_memo_image",
   "create_resource_upload_url",
+  "stage_memo_resource",
   "upload_memo_attachment",
   "move_notebook",
   "create_notebook",

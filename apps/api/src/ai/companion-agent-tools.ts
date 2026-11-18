@@ -8,27 +8,14 @@ import { companionWorkspaceCursor, proposeCompanionToolAction } from "./companio
 import { describeCompanionTool } from "./companion-tool-receipts";
 import { executeWorkspaceTool } from "../mcp/mcp-tool-executor";
 import { getMemoDetail, type MemoSearchSummary } from "../notes/memo-service";
-import { inboxNotebookIdentitySql } from "../notes/notebook-service";
-import { workspaceInboxId } from "../workspace/workspace-provisioning";
+import { resolveWorkspaceInboxId } from "../notes/notebook-service";
+export { resolveWorkspaceInboxId } from "../notes/notebook-service";
 import { AppError } from "../common/app-error";
 
 const AUTO_APPLY_WRITES = new Set(
   COMPANION_MCP_TOOLS.filter(tool => !tool.annotations.readOnlyHint).map(tool => tool.name),
 );
 const INBOX_DEFAULT_NOTEBOOK_TOOLS = new Set(["create_memo", "create_table_memo", "create_diagram_memo", "create_infographic_memo", "create_poster_memo", "use_note_template"]);
-
-export async function resolveWorkspaceInboxId(db: DatabaseAdapter, workspaceId: string) {
-  const preferred = workspaceInboxId(workspaceId);
-  const row = await db.prepare(
-    `SELECT id FROM notebooks
-     WHERE workspace_id = ? AND is_deleted = 0
-       AND ${inboxNotebookIdentitySql("notebooks")}
-     ORDER BY CASE WHEN id = ? THEN 0 WHEN id = 'nb_inbox' THEN 1 ELSE 2 END
-     LIMIT 1`,
-  ).bind(workspaceId, preferred).first<{ id: string }>();
-  if (!row) throw new AppError("inbox_notebook_missing", "The inbox notebook (等待分类) is unavailable.", 409);
-  return row.id;
-}
 
 const withOptionalInboxNotebook = (definition: CompanionToolDefinition): CompanionToolDefinition => {
   if (!INBOX_DEFAULT_NOTEBOOK_TOOLS.has(definition.name)) return definition;

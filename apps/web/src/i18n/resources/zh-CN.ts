@@ -8,6 +8,7 @@ export const zhCN = {
     suggested: "建议归入「{{name}}」，等待确认", retained: "保留在等待分类", apply: "采用建议", start: "开始分类",
     retry: "重新分类", undo: "移回等待分类", actionFailed: "未能执行此操作，请刷新后再试。",
     outcomes: {
+      explicit_location: "按要求保留在等待分类",
       invalid_model_response: "模型返回格式有误，可以重新分类",
       model_empty_output: "模型未返回内容", model_truncated: "模型输出被截断",
       model_json_invalid: "模型输出无法解析", model_fields_invalid: "模型返回字段或目标不符合要求",

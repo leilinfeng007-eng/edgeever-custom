@@ -81,9 +81,18 @@ When reading a prose memo with `get_memo` or listing full bodies with `list_memo
 
 Keyword searches with `search_memos` also return a `snippet` of up to 200 characters when the query or its terms can be located in the body. The original `excerpt` is retained. Results without a located body match, including title-only or tag-only matches, use the existing summary. Read the memo when the answer depends on context outside the snippet.
 
-## 3. Attach local files
+## 3. Save an AI conversation as a prose note
 
-`upload_memo_image` and `upload_memo_attachment` take the file as base64 inside the tool call, which is impractical for anything but very small files. When the agent can run shell commands, upload the file first, then create or update the memo with it:
+1. Search for the topic or a stable identifier. When the match is clear, read the existing note and update its relevant section using `expectedRevision`. Keep its structure and existing file references. When several notes could match, save the new material in the inbox with `autoClassify: false` for review.
+2. For a new formatted note, call `select_note_template` with its purpose. Supported purposes are `issue`, `meeting`, `progress`, `reading`, `idea`, `goals`, `general`, and `verbatim`. Give the user's chosen `templateId` if specified. Mixed-purpose notes use the workspace's general AI conversation template when present. Write the final Markdown and include the chosen template ID in `create_memo` to apply its title fallback and tags. Keep verbatim text as supplied.
+3. Stage each file before writing. Put images next to the paragraph they illustrate, and document links in the sections that cite them. Use a final **References** section for files that apply to the whole note, and reuse the same resource ID for later citations. Pass `requireResourcePlacement: true` to check that each new resource is referenced.
+4. Supply `notebookId` when the user explicitly chooses a notebook. Otherwise, new notes enter the inbox and substantive edits to existing prose notes can return there for classification. Exact matches without attachments can return the existing note. Use `allowDuplicate: true` when a separate copy was requested.
+
+On Docker and other Bun self-hosted deployments, the background classifier uses EdgeEver's default model. It uses the note title, body, tags and attachment names, and chooses an existing notebook. Unclear notes and model failures stay in the inbox. The inbox UI shows classification status and lets users retry. Set `EDGE_EVER_AUTO_CLASSIFY=false` in the service environment to turn off automatic classification, or set `EDGE_EVER_AUTO_CLASSIFY_WORKSPACE` to limit it to one workspace.
+
+## 4. Attach local files
+
+Use `stage_memo_resource` to send an original local image or file up to 2 MiB directly through MCP. Pass `kind`, `filename`, `mimeType`, and `dataBase64`. The response includes a pending `resourceId` and the Markdown snippet. For larger files, or if the client can only supply a local path, use a one-time upload URL:
 
 1. Call `create_resource_upload_url` with `kind` (`image` or `attachment`), `mimeType`, the exact `byteSize`, and optionally `filename` and `label` (alt text or link label). No memo is needed.
 2. Run the returned `curl` command after replacing `<path-to-file>`. It sends the file with `PUT` to `/api/public/resource-uploads` and carries a dedicated upload token in the `Authorization` header. The MCP token is never part of the command. The `201` response contains `resourceId`, the authenticated `url` and the `markdownImage` or `markdownLink` to insert.
@@ -91,7 +100,7 @@ Keyword searches with `search_memos` also return a `snippet` of up to 200 charac
 
 Each URL accepts one file of exactly the declared size and type, up to 100 MiB, for 15 minutes. A request with the wrong size or type is rejected without using up the URL, and repeating a successful upload returns the same `resourceId`. The URL also stops working when the token that created it is revoked or loses `write:resources`. An uploaded file that is not bound to a memo within 24 hours is deleted. A workspace can hold up to 20 unused URLs and 100 unbound files (1 GiB) at a time. Binding requires `write:resources`.
 
-## 4. Troubleshoot
+## 5. Troubleshoot
 
 | Symptom | Cause and fix |
 |---|---|

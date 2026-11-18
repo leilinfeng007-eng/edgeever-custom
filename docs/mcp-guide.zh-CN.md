@@ -81,9 +81,18 @@ bun /path/to/edgeever/scripts/edgeever-mcp-stdio.mjs --profile personal
 
 使用 `search_memos` 进行关键词搜索时，如果能在正文中定位查询词或其中的词项，结果还会包含最多 200 个字符的 `snippet` 命中片段，并保留原有 `excerpt` 摘要。无法定位正文命中的结果（包括仅标题或标签命中）沿用现有摘要。如果答案涉及片段外的上下文，请继续读取笔记全文。
 
-## 3. 上传本地文件
+## 3. 将 AI 对话保存为普通笔记
 
-`upload_memo_image` 和 `upload_memo_attachment` 需要在工具调用中以 base64 传入文件，只适合很小的文件。如果 Agent 可以执行命令行，请先上传文件，再用它创建或更新笔记：
+1. 按主题或可回查的编号搜索已有笔记。匹配明确时，读取旧笔记，传入 `expectedRevision`，补充到对应小节并保留原结构和附件引用。有多个候选笔记时，把新材料以 `autoClassify: false` 保存到「等待分类」，留待确认。
+2. 新建并整理笔记时，调用 `select_note_template` 按用途选模板。问题报告、会议纪要、进展复盘、阅读、灵感和目标拆解分别用 `issue`、`meeting`、`progress`、`reading`、`idea`、`goals`。混合用途用 `general`，优先使用工作区的「AI 对话通用模板」。原样保存用 `verbatim`。用户指定模板时传 `templateId`。将整理好的 Markdown 与所选模板 ID 交给 `create_memo`，可带入模板的默认标题和标签。
+3. 写入前先上传原件。图片紧跟对应段落，文档链接放在引用它的小节。供整篇查阅的材料放在文末「参考资料」。同一个文件只上传一次。写入时传入 `requireResourcePlacement: true` 可检查新增资源是否都有正文引用。
+4. 用户明确指定笔记本时传入 `notebookId`。否则新笔记进入「等待分类」，已有普通笔记更新正文后也可回到该处重新分类。无附件的完全相同内容可以复用原笔记，用户要求另存副本时传 `allowDuplicate: true`。
+
+Docker 或其他 Bun 自托管部署的后台归类使用 EdgeEver 配置的默认模型。它参考标题、正文、已有标签和附件名，在现有笔记本中选择归属。归属不明或模型调用失败时留在「等待分类」，可以在网页上查看状态并重试。给服务设置 `EDGE_EVER_AUTO_CLASSIFY=false` 可关闭自动归类，或设置 `EDGE_EVER_AUTO_CLASSIFY_WORKSPACE` 将其限制在指定工作区。
+
+## 4. 上传本地文件
+
+使用 `stage_memo_resource` 可以通过 MCP 直接上传不超过 2 MiB 的图片或文档原件。传入 `kind`、`filename`、`mimeType` 和 `dataBase64`，结果包含待绑定的 `resourceId` 与可插入的 Markdown。文件更大或客户端只能提供本地路径时，使用一次性上传 URL：
 
 1. 调用 `create_resource_upload_url`，传入 `kind`（`image` 或 `attachment`）、`mimeType` 和准确的 `byteSize`，可选传入 `filename` 和 `label`（图片替代文本或链接文字）。无需事先创建笔记。
 2. 将返回的 `curl` 命令中的 `<path-to-file>` 替换为文件路径后执行。该命令以 `PUT` 将文件发送到 `/api/public/resource-uploads`，并在 `Authorization` 请求头中携带专用的上传 Token。命令中不会出现 MCP Token。`201` 响应包含 `resourceId`、需要登录访问的 `url`，以及可插入的 `markdownImage` 或 `markdownLink`。
@@ -91,7 +100,7 @@ bun /path/to/edgeever/scripts/edgeever-mcp-stdio.mjs --profile personal
 
 每个 URL 只接受一个与声明大小和类型完全一致的文件，最大 100 MiB，有效期 15 分钟。大小或类型不符的请求会被拒绝，但不会消耗该 URL；重复一次已成功的上传会返回相同的 `resourceId`。创建它的 Token 被撤销或失去 `write:resources` 权限后，URL 也随之失效。上传后 24 小时内未绑定到笔记的文件会被删除。每个工作区最多同时保留 20 个未使用的 URL 和 100 个未绑定文件（共 1 GiB）。绑定文件需要 `write:resources` 权限。
 
-## 4. 排障
+## 5. 排障
 
 | 现象 | 原因与处理 |
 |---|---|

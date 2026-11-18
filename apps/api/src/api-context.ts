@@ -13,6 +13,7 @@ export type Bindings = {
   storage: StorageAdapter;
   EDGE_EVER_AUTH_USERNAME?: string;
   EDGE_EVER_RUNTIME?: string;
+  EDGE_EVER_AUTO_CLASSIFY?: string;
   EDGE_EVER_AUTO_CLASSIFY_WORKSPACE?: string;
   EDGE_EVER_CONTAINER_IMAGE?: string;
   EDGE_EVER_DEPLOYMENT_TRIGGER?: string;

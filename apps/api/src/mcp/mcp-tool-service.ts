@@ -45,9 +45,12 @@ import { audit, auditStatement } from "../common/audit";
 import type { AppContext, AuditActor, AuthContext, Bindings } from "../api-context";
 import { AppError } from "../common/app-error";
 import { readMcpAttachment } from "./mcp-attachment";
-import { enqueueInboxClassification, rescheduleInboxClassification } from "../ai/inbox-classification";
+import { canClassifyInbox, enqueueInboxClassification, hasInboxHold, rescheduleInboxClassification, stopMemoClassification } from "../ai/inbox-classification";
 import { isDemoModeEnabled } from "../workspace/demo-mode";
 import { createId, isoNow } from "../common/entity-utils";
+import { sha256 } from "../common/hash-utils";
+import { selectMcpNoteTemplate } from "./mcp-note-template";
+import { stageMemoResource, validateMcpResourcePlacement } from "./mcp-note-resources";
 import {
   decodeBase64Data,
   encodeBase64Data,
@@ -87,6 +90,7 @@ import {
   getNotebook,
   listNotebooks,
   resolveNotebookPath,
+  resolveWorkspaceInboxId,
   updateNotebookRecord,
 } from "../notes/notebook-service";
 import {
@@ -464,27 +468,79 @@ export const callMcpTool = async (
         ...(name === "delete_table_record" ? { deleted: true } : { record: next.records.find((item) => item.id === recordId) }),
       };
     }
-    // 输入 notebookId、可选正文/标签/resourceIds；返回 { memo, resources? }。先校验 pending，再随笔记原子绑定，失败不消耗文件。
     case "create_memo": {
       assertScope(auth, "write:memos");
-      const notebookId = getRequiredString(args.notebookId, "notebookId");
+      const db = c.env.storage.db;
+      const workspaceId = auth.workspaceId;
+      const destination = getOptionalString(args.notebookId);
+      const notebookId = destination ?? await resolveWorkspaceInboxId(db, workspaceId);
       const actor = getAuditActor(c);
       const actorLabel = getActorLabel(c);
+      const templateId = getOptionalString(args.templateId);
+      const template = templateId ? await getMemoTemplate(db, workspaceId, templateId) : null;
+      if (templateId && !template) throw new AppError("not_found", "Template not found", 404);
+      const contentMarkdown = typeof args.contentMarkdown === "string" ? args.contentMarkdown : "";
+      if (template && !contentMarkdown.trim()) {
+        throw new AppError("invalid_params", "Provide completed contentMarkdown, or use use_note_template for an unfilled draft.", 400);
+      }
+      const title = getOptionalString(args.title) ?? template?.title ?? undefined;
       const resourceIds = parseResourceIds(args.resourceIds) ?? [];
-      const bind = await preparePendingResourceBinding(c.env.storage.db, auth, resourceIds, actor);
-      const memo = await withBindingConflict(Boolean(bind), () => createMemoRecord(c.env.storage.db, auth.workspaceId, {
+      const bind = await preparePendingResourceBinding(db, auth, resourceIds, actor);
+      if (resourceIds.length && (args.requireResourcePlacement === true || !destination)) {
+        await validateMcpResourcePlacement(db, workspaceId, contentMarkdown, resourceIds);
+      }
+      // An exact prose retry can reuse the existing note. Candidate merges with
+      // changed content or files are decided by the caller after reading the note.
+      if (auth.kind === "agent" && !destination && !bind && args.allowDuplicate !== true && title && contentMarkdown.trim()) {
+        const hash = await sha256(contentMarkdown + JSON.stringify(markdownToDoc(contentMarkdown)));
+        const matches = await db.prepare(`
+          SELECT m.id FROM memo_contents c JOIN memos m ON m.id = c.memo_id
+          WHERE c.content_hash = ? AND m.title = ? AND m.workspace_id = ?
+            AND m.is_deleted = 0 AND m.is_archived = 0
+            AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.memo_id = m.id AND r.is_deleted = 0)
+          LIMIT 2
+        `).bind(hash, title, workspaceId).all<{ id: string }>();
+        if (matches.results.length > 1) {
+          throw new AppError("duplicate_match_ambiguous", "Multiple exact matches exist. Read them before choosing a note to update.", 409);
+        }
+        if (matches.results[0]) {
+          const memo = await getMemoDetail(db, workspaceId, matches.results[0].id);
+          if (memo) return { memo, reused: true };
+        }
+      }
+
+      const memo = await withBindingConflict(Boolean(bind), () => createMemoRecord(db, workspaceId, {
         notebookId,
-        title: getOptionalString(args.title) ?? undefined,
-        contentMarkdown: getOptionalString(args.contentMarkdown) ?? "",
-        tags: getOptionalStringArray(args.tags),
+        title,
+        contentMarkdown,
+        tags: [...getOptionalStringArray(args.tags), ...(template?.tags ?? [])],
         createdAt: getOptionalString(args.createdAt) ?? undefined,
         updatedAt: getOptionalString(args.updatedAt) ?? undefined,
       }, actor, actorLabel, memoId => [
         ...(bind?.(memoId) ?? []),
-        ...enqueueInboxClassification(c.env, auth, notebookId, memoId),
+        ...(destination || args.autoClassify === false
+          ? stopMemoClassification(c.env, auth, memoId)
+          : enqueueInboxClassification(c.env, auth, notebookId, memoId)),
+        ...(templateId ? [auditStatement(db, actor.actorType, actor.actorId, "template.use", "template", templateId, { memoId })] : []),
       ]));
-
-      return { memo, ...(resourceIds.length ? { resources: await listResourcesForMemo(c.env.storage.db, auth.workspaceId, memo.id) } : {}) };
+      return {
+        memo,
+        ...(templateId ? { appliedTemplateId: templateId } : {}),
+        ...(resourceIds.length ? { resources: await listResourcesForMemo(db, workspaceId, memo.id) } : {}),
+      };
+    }
+    case "stage_memo_resource": {
+      assertScope(auth, "write:resources");
+      const kind = getRequiredString(args.kind, "kind");
+      if (kind !== "image" && kind !== "attachment") {
+        throw new AppError("invalid_params", 'kind must be "image" or "attachment".', 400);
+      }
+      return stageMemoResource(c, auth, {
+        kind,
+        mimeType: getRequiredString(args.mimeType, "mimeType"),
+        filename: getRequiredString(args.filename, "filename"),
+        label: getOptionalString(args.label),
+      }, getRequiredString(args.dataBase64, "dataBase64"));
     }
     // 返回上传 URL、方法、headers 与过期时间；只创建上传资格，不等于文件上传或笔记绑定成功。
     case "create_resource_upload_url": {
@@ -695,57 +751,71 @@ export const callMcpTool = async (
         actorLabel: getActorLabel(c),
       });
     }
-    // 普通笔记写入返回 { memo, resources? }；结构化笔记须用专用工具，版本/编辑会话冲突不能靠盲重试覆盖。
     case "update_memo": {
       assertScope(auth, "write:memos");
       const memoId = getRequiredString(args.memoId, "memoId");
-      if (args.contentMarkdown !== undefined) {
-        const existing = await getMemoDetail(c.env.storage.db, auth.workspaceId, memoId);
-        if (existing && parseDiagramDocument(existing.contentMarkdown)) {
-          throw new AppError(
-            "diagram_update_required",
-            "Diagram content cannot be replaced through update_memo. Use update_diagram for semantic changes.",
-            400,
-          );
-        }
-        if (existing && hasTableDocumentMarker(existing.contentMarkdown)) {
-          throw new AppError(
-            "table_update_required",
-            "Structured table content cannot be replaced through update_memo.",
-            400,
-          );
-        }
-        if (existing && hasPosterDocumentMarker(existing.contentMarkdown)) {
-          throw new AppError("poster_update_required", "Poster content cannot be replaced through update_memo. Use get_poster then update_poster.", 400);
-        }
-        if (existing && hasInfographicDocumentMarker(existing.contentMarkdown)) {
-          throw new AppError(
-            "infographic_update_required",
-            "Infographic content cannot be replaced through update_memo.",
-            400,
-          );
-        }
+      const db = c.env.storage.db;
+      const workspaceId = auth.workspaceId;
+      const existing = await getMemoDetail(db, workspaceId, memoId);
+      if (!existing) throw new AppError("not_found", "Memo not found", 404);
+      const markdown = typeof args.contentMarkdown === "string" ? args.contentMarkdown : undefined;
+      const structured = [
+        [() => parseDiagramDocument(existing.contentMarkdown), "diagram_update_required", "Use update_diagram for diagram content."],
+        [() => hasTableDocumentMarker(existing.contentMarkdown), "table_update_required", "Use the table tools for structured tables."],
+        [() => hasPosterDocumentMarker(existing.contentMarkdown), "poster_update_required", "Use get_poster then update_poster."],
+        [() => hasInfographicDocumentMarker(existing.contentMarkdown), "infographic_update_required", "Use the infographic tools."],
+      ] as const;
+      const existingKind = structured.find(([matches]) => matches());
+      if (markdown !== undefined && existingKind) {
+        throw new AppError(existingKind[1], existingKind[2], 400);
       }
+
       const actor = getAuditActor(c);
       const actorLabel = getActorLabel(c);
       const resourceIds = parseResourceIds(args.resourceIds) ?? [];
-      const bind = await preparePendingResourceBinding(c.env.storage.db, auth, resourceIds, actor);
-      const classificationEffects = args.contentMarkdown !== undefined || args.title !== undefined || args.tags !== undefined || bind
-        ? rescheduleInboxClassification(c.env, auth, memoId)
-        : [];
+      const bind = await preparePendingResourceBinding(db, auth, resourceIds, actor);
+      if (args.requireResourcePlacement === true || (auth.kind === "agent" && markdown !== undefined && markdown !== existing.contentMarkdown)) {
+        await validateMcpResourcePlacement(
+          db, workspaceId, markdown ?? existing.contentMarkdown,
+          args.requireResourcePlacement === true ? resourceIds : [],
+          markdown === undefined ? undefined : { id: memoId, contentMarkdown: existing.contentMarkdown, allowRemoval: args.allowAttachmentReferenceRemoval === true },
+        );
+      }
+
+      const destination = getOptionalString(args.notebookId);
+      const title = getOptionalString(args.title) ?? undefined;
+      const explicitLocation = Boolean(destination) || args.autoClassify === false;
+      const changed = Boolean(bind) || (title !== undefined && title !== existing.title) ||
+        (markdown !== undefined && markdown !== existing.contentMarkdown);
+      const toInbox = !explicitLocation && changed && !existingKind && !existing.isArchived &&
+        auth.kind === "agent" && canClassifyInbox(c.env, workspaceId) &&
+        (args.autoClassify === true || !(await hasInboxHold(db, workspaceId, memoId)));
+      const notebookId = toInbox ? await resolveWorkspaceInboxId(db, workspaceId) : destination ?? undefined;
+      const classificationEffects = toInbox && notebookId
+        ? enqueueInboxClassification(c.env, auth, notebookId, memoId)
+        : explicitLocation ? stopMemoClassification(c.env, auth, memoId) : [];
+      const expectedRevision = typeof args.expectedRevision === "number" && Number.isInteger(args.expectedRevision)
+        ? args.expectedRevision : auth.kind === "agent" ? existing.revision : undefined;
+      // The read above validates the user's base. Repeat the check inside the
+      // batch so a concurrent move or edit cannot be overwritten between reads.
+      const before = expectedRevision !== undefined ? [db.prepare(`
+        UPDATE memo_contents SET revision = CASE
+          WHEN revision = ? AND EXISTS (
+            SELECT 1 FROM memos m WHERE m.id = ? AND m.workspace_id = ?
+              AND m.notebook_id = ? AND m.updated_at = ? AND m.is_deleted = 0
+          ) THEN revision ELSE NULL END
+        WHERE memo_id = ?
+      `).bind(expectedRevision, memoId, workspaceId, existing.notebookId, existing.updatedAt, memoId)] : [];
       const result = await withBindingConflict(Boolean(bind), () => updateMemoRecord(
-        c.env.storage.db,
-        auth.workspaceId,
+        db,
+        workspaceId,
         memoId,
         {
-          expectedRevision:
-            typeof args.expectedRevision === "number" && Number.isInteger(args.expectedRevision)
-              ? args.expectedRevision
-              : undefined,
-          notebookId: getOptionalString(args.notebookId) ?? undefined,
-          title: getOptionalString(args.title) ?? undefined,
+          expectedRevision,
+          notebookId,
+          title,
           isPinned: typeof args.isPinned === "boolean" ? args.isPinned : undefined,
-          contentMarkdown: getOptionalString(args.contentMarkdown) ?? undefined,
+          contentMarkdown: markdown,
           tags: Array.isArray(args.tags) ? getOptionalStringArray(args.tags) : undefined,
           createdAt: getOptionalString(args.createdAt) ?? undefined,
           updatedAt: getOptionalString(args.updatedAt) ?? undefined,
@@ -756,13 +826,10 @@ export const callMcpTool = async (
         bind || classificationEffects.length ? { before: [], after: (id) => [...(bind?.(id) ?? []), ...classificationEffects] } : undefined,
       ));
 
-      if ("error" in result) {
-        throw new Error(result.message);
-      }
-
+      if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409);
       return {
         memo: result.memo,
-        ...(resourceIds.length ? { resources: await listResourcesForMemo(c.env.storage.db, auth.workspaceId, memoId) } : {}),
+        ...(resourceIds.length ? { resources: await listResourcesForMemo(db, workspaceId, memoId) } : {}),
       };
     }
     case "trash_memos": {
@@ -1095,6 +1162,13 @@ export const callMcpTool = async (
     case "list_note_templates": {
       assertScope(auth, "read:memos");
       return { templates: await listMemoTemplates(c.env.storage.db, auth.workspaceId) };
+    }
+    case "select_note_template": {
+      assertScope(auth, "read:memos");
+      return selectMcpNoteTemplate(
+        c.env.storage.db, auth.workspaceId, getOptionalString(args.purpose) ?? "general",
+        getOptionalString(args.templateId) ?? undefined,
+      );
     }
     case "get_note_template": {
       assertScope(auth, "read:memos");

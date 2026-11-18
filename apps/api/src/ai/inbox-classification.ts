@@ -1,5 +1,5 @@
 /**
- * 本地自定义收件箱归档：仅指定自托管工作区启用，按任务租约调用模型并检查源笔记版本。
+ * 本地自定义收件箱归档：自托管后台任务，按任务租约调用模型并检查源笔记版本。
  * 从 self-hosted-server 启动；模型建议不能跳过笔记服务的工作区隔离或并发校验。
  */
 import { normalizeTags, type MemoDetail } from "@edgeever/shared";
@@ -8,6 +8,7 @@ import type { AuthContext, Bindings } from "../api-context";
 import { AppError } from "../common/app-error";
 import { classifyWithDefaultModel, isModelOutputError, type ClassifierInput } from "./inbox-classification-model";
 import { isDemoModeEnabled } from "../workspace/demo-mode";
+import { listResourcesForMemo } from "../attachments/resource-service";
 import { getMemoDetail, updateMemoRecord } from "../notes/memo-service";
 import { inboxNotebookIdentitySql } from "../notes/notebook-service";
 import type { DatabaseAdapter, PreparedStatementAdapter } from "../storage/storage-contract";
@@ -26,14 +27,18 @@ const classificationSchema = z.strictObject({
   review: z.boolean().optional(),
 });
 
-type ClassificationJob = { memo_id: string; inbox_id: string; attempts: number; claim_token: string };
+type ClassificationJob = { workspace_id: string; memo_id: string; inbox_id: string; attempts: number; claim_token: string };
 type Destination = { id: string; name: string; parent_id: string | null; path: string };
 type Classify = (input: ClassifierInput) => Promise<unknown>;
 
-export const eligibleWorkspace = (env: Bindings) =>
-  env.EDGE_EVER_RUNTIME === "self-hosted-bun" && !isDemoModeEnabled(env.EDGE_EVER_DEMO_MODE)
-    ? env.EDGE_EVER_AUTO_CLASSIFY_WORKSPACE?.trim() || null
-    : null;
+const enabled = (env: Bindings) =>
+  env.EDGE_EVER_RUNTIME === "self-hosted-bun" && !isDemoModeEnabled(env.EDGE_EVER_DEMO_MODE) &&
+  !["0", "false", "off"].includes(env.EDGE_EVER_AUTO_CLASSIFY?.trim().toLowerCase() ?? "");
+
+const configuredWorkspace = (env: Bindings) => env.EDGE_EVER_AUTO_CLASSIFY_WORKSPACE?.trim() || null;
+
+export const canClassifyInbox = (env: Bindings, workspaceId: string) =>
+  enabled(env) && (!configuredWorkspace(env) || configuredWorkspace(env) === workspaceId);
 
 export const enqueueInboxClassification = (
   env: Bindings,
@@ -41,22 +46,56 @@ export const enqueueInboxClassification = (
   notebookId: string,
   memoId: string,
 ): PreparedStatementAdapter[] => {
-  if (auth.kind !== "agent" || eligibleWorkspace(env) !== auth.workspaceId) return [];
+  if (auth.kind !== "agent" || !canClassifyInbox(env, auth.workspaceId)) return [];
   return [env.storage.db.prepare(`
     INSERT INTO inbox_classification_jobs (memo_id, workspace_id, inbox_id, available_at)
-    SELECT ?, n.workspace_id, n.id, ?
-    FROM notebooks n
-    WHERE n.id = ? AND n.workspace_id = ? AND n.is_deleted = 0 AND ${inboxNotebookIdentitySql("n")}
-  `).bind(memoId, Date.now() + SETTLE_MS, notebookId, auth.workspaceId)];
+    SELECT m.id, m.workspace_id, n.id, ?
+    FROM memos m JOIN notebooks n ON n.id = m.notebook_id AND n.workspace_id = m.workspace_id
+    WHERE m.id = ? AND m.workspace_id = ? AND n.id = ? AND m.is_deleted = 0 AND m.is_archived = 0
+      AND n.is_deleted = 0 AND ${inboxNotebookIdentitySql("n")}
+    ON CONFLICT (memo_id) DO UPDATE SET inbox_id = excluded.inbox_id, status = 'pending',
+      available_at = excluded.available_at, attempts = 0, claim_token = NULL, outcome = NULL,
+      destination_id = NULL, reason = NULL, result_revision = NULL, suggested_tags = NULL
+  `).bind(Date.now() + SETTLE_MS, memoId, auth.workspaceId, notebookId)];
 };
 
+export const stopMemoClassification = (env: Bindings, auth: AuthContext, memoId: string) => {
+  if (auth.kind !== "agent") return [];
+  const db = env.storage.db;
+  const recordedHold = db.prepare(`
+    INSERT INTO inbox_classification_jobs (memo_id, workspace_id, inbox_id, status, outcome)
+    SELECT m.id, m.workspace_id, n.id, 'retained', 'explicit_location'
+    FROM memos m JOIN notebooks n ON n.id = m.notebook_id AND n.workspace_id = m.workspace_id
+    WHERE m.id = ? AND m.workspace_id = ? AND m.is_deleted = 0 AND m.is_archived = 0
+      AND n.is_deleted = 0 AND ${inboxNotebookIdentitySql("n")}
+    ON CONFLICT (memo_id) DO UPDATE SET inbox_id = excluded.inbox_id, status = 'retained',
+      outcome = 'explicit_location', claim_token = NULL, destination_id = NULL, reason = NULL,
+      attempts = 0, result_revision = NULL, suggested_tags = NULL
+  `).bind(memoId, auth.workspaceId);
+  const cancelPending = db.prepare(`
+    UPDATE inbox_classification_jobs
+    SET status = 'retained', outcome = 'explicit_location', claim_token = NULL,
+        destination_id = NULL, reason = NULL, result_revision = NULL, suggested_tags = NULL
+    WHERE memo_id = ? AND workspace_id = ? AND status IN ('pending', 'running')
+  `).bind(memoId, auth.workspaceId);
+  return [recordedHold, cancelPending];
+};
+
+export async function hasInboxHold(db: DatabaseAdapter, workspaceId: string, memoId: string) {
+  return Boolean(await db.prepare(`
+    SELECT 1 FROM inbox_classification_jobs j
+    JOIN memos m ON m.id = j.memo_id AND m.workspace_id = j.workspace_id AND m.notebook_id = j.inbox_id
+    WHERE j.workspace_id = ? AND j.memo_id = ? AND j.status = 'retained' AND j.outcome IN ('explicit_location', 'undone')
+  `).bind(workspaceId, memoId).first());
+}
+
 export const rescheduleInboxClassification = (env: Bindings, auth: AuthContext, memoId: string) => {
-  if (auth.kind !== "agent" || eligibleWorkspace(env) !== auth.workspaceId) return [];
+  if (auth.kind !== "agent" || !canClassifyInbox(env, auth.workspaceId)) return [];
   return [env.storage.db.prepare(`
     UPDATE inbox_classification_jobs
     SET status = 'pending', available_at = ?, attempts = 0, claim_token = NULL, outcome = NULL,
         destination_id = NULL, reason = NULL, result_revision = NULL, suggested_tags = NULL
-    WHERE memo_id = ? AND workspace_id = ? AND status != 'moved' AND COALESCE(outcome, '') != 'undone'
+    WHERE memo_id = ? AND workspace_id = ? AND status != 'moved' AND COALESCE(outcome, '') NOT IN ('undone', 'explicit_location')
       AND EXISTS (SELECT 1 FROM memos m WHERE m.id = memo_id AND m.workspace_id = inbox_classification_jobs.workspace_id
         AND m.notebook_id = inbox_id AND m.is_deleted = 0 AND m.is_archived = 0)
   `).bind(Date.now() + SETTLE_MS, memoId, auth.workspaceId)];
@@ -125,20 +164,21 @@ export async function processInboxClassification(
   classify: Classify = classifyWithDefaultModel(env),
   now = Date.now(),
 ) {
-  const workspaceId = eligibleWorkspace(env);
-  if (!workspaceId || signal.aborted) return;
+  if (!enabled(env) || signal.aborted) return;
+  const onlyWorkspace = configuredWorkspace(env);
   const db = env.storage.db;
   const job = await db.prepare(`
     UPDATE inbox_classification_jobs
     SET status = 'running', attempts = attempts + 1, claim_token = ?, available_at = ?
     WHERE memo_id = (
       SELECT memo_id FROM inbox_classification_jobs
-      WHERE workspace_id = ? AND status IN ('pending', 'running') AND available_at <= ?
+      WHERE status IN ('pending', 'running') AND available_at <= ? ${onlyWorkspace ? 'AND workspace_id = ?' : ''}
       ORDER BY available_at, memo_id LIMIT 1
     )
-    RETURNING memo_id, inbox_id, attempts, claim_token
-  `).bind(crypto.randomUUID(), now + CLAIM_DURATION_MS, workspaceId, now).first<ClassificationJob>();
+    RETURNING workspace_id, memo_id, inbox_id, attempts, claim_token
+  `).bind(crypto.randomUUID(), now + CLAIM_DURATION_MS, now, ...(onlyWorkspace ? [onlyWorkspace] : [])).first<ClassificationJob>();
   if (!job) return;
+  const workspaceId = job.workspace_id;
 
   const finish = async (outcome: string, retry = false, suggestion?: { id?: string; reason?: string; tags?: string[]; revision?: number }) => {
     const pending = retry && job.attempts < MAX_ATTEMPTS;
@@ -159,13 +199,17 @@ export async function processInboxClassification(
 
     const memo = await getMemoDetail(db, workspaceId, job.memo_id);
     if (!memo || memo.notebookId !== job.inbox_id || memo.isArchived) return await finish("source_changed");
-    if (!memo.contentText.trim()) return await finish("empty_body");
+    const attachments = (await listResourcesForMemo(db, workspaceId, memo.id)).slice(0, 20)
+      .map(({ filename, kind }) => ({ filename, kind }));
+    if (!memo.contentText.trim() && !attachments.length && !memo.tags.length && (!memo.title || /^Untitled$|^无标题$/.test(memo.title))) {
+      return await finish("empty_body");
+    }
 
     const destinations = await getDestinations(db, workspaceId);
     if (!destinations.length) return await finish("no_destination");
     const decision = classificationSchema.safeParse(await classify({
       workspaceId,
-      note: { title: memo.title, text: memo.contentText.slice(0, 8_000), existingTags: memo.tags },
+      note: { title: memo.title, text: memo.contentText.slice(0, 8_000), existingTags: memo.tags, attachments },
       destinations: destinations.map(({ id, path }) => ({ id, path })),
       signal: AbortSignal.any([signal, AbortSignal.timeout(MODEL_TIMEOUT_MS)]),
     }));
@@ -216,7 +260,7 @@ export async function processInboxClassification(
 }
 
 export const startInboxClassification = (env: Bindings) => {
-  if (!eligibleWorkspace(env)) return null;
+  if (!enabled(env)) return null;
   const controller = new AbortController();
   let running: Promise<void> | undefined;
   const tick = () => {

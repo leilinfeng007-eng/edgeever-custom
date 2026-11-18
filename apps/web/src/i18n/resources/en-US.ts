@@ -8,6 +8,7 @@ export const enUS = {
     suggested: "Suggested notebook: {{name}}", retained: "Kept in the inbox", apply: "Apply suggestion", start: "File this note",
     retry: "Retry filing", undo: "Move back to inbox", actionFailed: "Action failed. Refresh and try again.",
     outcomes: {
+      explicit_location: "Kept in the inbox as requested",
       invalid_model_response: "The model returned an invalid response. You can retry.",
       model_empty_output: "The model returned no content", model_truncated: "The model response was cut off",
       model_json_invalid: "The response could not be parsed", model_fields_invalid: "The model returned invalid fields or a destination",

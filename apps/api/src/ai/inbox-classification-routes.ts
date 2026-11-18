@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import type { AppContext, AppEnv } from "../api-context";
 import { apiError } from "../common/http-errors";
-import { classificationTags, eligibleWorkspace, getDestinations } from "./inbox-classification";
+import { classificationTags, canClassifyInbox, getDestinations } from "./inbox-classification";
 import { getMemoDetail, updateMemoRecord } from "../notes/memo-service";
 import { inboxNotebookIdentitySql } from "../notes/notebook-service";
 import { getActorLabel, getAuditActor, getWorkspaceId, requireUser } from "../auth/request-auth";
@@ -37,14 +37,14 @@ const conflict = (c: AppContext) => apiError(c, "classification_changed", "The n
 export function registerInboxClassificationRoutes(app: Hono<AppEnv>) {
   app.get("/api/v1/inbox-classification", (c) => {
     const denied = requireUser(c);
-    return denied ?? c.json({ enabled: eligibleWorkspace(c.env) === getWorkspaceId(c) });
+    return denied ?? c.json({ enabled: canClassifyInbox(c.env, getWorkspaceId(c)) });
   });
 
   app.get("/api/v1/inbox-classification/:id", async (c) => {
     const denied = requireUser(c);
     if (denied) return denied;
     const workspaceId = getWorkspaceId(c);
-    if (eligibleWorkspace(c.env) !== workspaceId) return apiError(c, "classification_disabled", "Automatic filing is disabled.", 404);
+    if (!canClassifyInbox(c.env, workspaceId)) return apiError(c, "classification_disabled", "Automatic filing is disabled.", 404);
     const row = await getStatus(c.env.storage.db, workspaceId, c.req.param("id"));
     if (!row) return apiError(c, "not_found", "Memo not found.", 404);
     const { inInbox, status, outcome, attempts, reason, destinationId, destinationName, canUndo, notebookId } = row;
@@ -59,7 +59,7 @@ export function registerInboxClassificationRoutes(app: Hono<AppEnv>) {
     const denied = requireUser(c);
     if (denied) return denied;
     const workspaceId = getWorkspaceId(c);
-    if (eligibleWorkspace(c.env) !== workspaceId) return apiError(c, "classification_disabled", "Automatic filing is disabled.", 404);
+    if (!canClassifyInbox(c.env, workspaceId)) return apiError(c, "classification_disabled", "Automatic filing is disabled.", 404);
     const result = await c.env.storage.db.prepare(`
       INSERT INTO inbox_classification_jobs (memo_id, workspace_id, inbox_id)
       SELECT m.id, m.workspace_id, n.id FROM memos m JOIN notebooks n ON n.id = m.notebook_id AND n.workspace_id = m.workspace_id
@@ -76,7 +76,7 @@ export function registerInboxClassificationRoutes(app: Hono<AppEnv>) {
     if (denied) return denied;
     const workspaceId = getWorkspaceId(c);
     const { id, action } = c.req.param();
-    if (eligibleWorkspace(c.env) !== workspaceId || (action !== "apply" && action !== "undo")) {
+    if (!canClassifyInbox(c.env, workspaceId) || (action !== "apply" && action !== "undo")) {
       return apiError(c, "not_found", "Classification action not found.", 404);
     }
     const db = c.env.storage.db;

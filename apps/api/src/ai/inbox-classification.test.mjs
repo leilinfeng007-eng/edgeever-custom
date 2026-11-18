@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { processInboxClassification } from "./inbox-classification.ts";
 import { executeWorkspaceTool } from "../mcp/mcp-tool-executor.ts";
-import { createMemoRecord, getMemoDetail } from "../notes/memo-service.ts";
+import { createMemoRecord, getMemoDetail, updateMemoRecord } from "../notes/memo-service.ts";
 import { createSelfHostedStorageAdapter } from "../storage/self-hosted-storage-adapter.ts";
 
 const workspaceId = "ws_default";
@@ -37,7 +37,7 @@ async function withFixture(run) {
     const context = { env, get: () => auth };
     const create = async (options = {}, identity = auth, ready = true) => {
       const { memo } = await executeWorkspaceTool(context, identity, "create_memo", {
-        notebookId: "nb_inbox",
+        allowDuplicate: true,
         title: "WeKnora 部署记录",
         contentMarkdown: noteMarkdown,
         tags: ["AI沉淀", "WeKnora"],
@@ -91,9 +91,9 @@ test("direct destinations, manual notes, other workspaces and disabled instances
     expect(job(manual.id)).toBeNull();
     sqlite.query("INSERT INTO workspaces (id, name, is_personal) VALUES ('ws_another', 'Other', 1)").run();
     sqlite.query("INSERT INTO notebooks (id, workspace_id, name, slug) VALUES ('ws_another_inbox', 'ws_another', '等待分类', 'inbox')").run();
-    const other = await create({ notebookId: "ws_another_inbox" }, { ...auth, workspaceId: "ws_another" });
+    const other = await create({}, { ...auth, workspaceId: "ws_another" });
     expect(job(other.id)).toBeNull();
-    env.EDGE_EVER_AUTO_CLASSIFY_WORKSPACE = undefined;
+    env.EDGE_EVER_AUTO_CLASSIFY = "false";
     const disabled = await create();
     expect(job(disabled.id)).toBeNull();
     expect((await get(disabled.id)).notebookId).toBe("nb_inbox");
@@ -119,7 +119,7 @@ test("temporary provider failures retry and a claim interrupted by a restart can
     expect(job(memo.id)).toMatchObject({ status: "pending", attempts: 1, outcome: "classification_failed" });
     await classify(async () => { throw new Error("Retry must wait"); }, 10_000);
     expect(job(memo.id).attempts).toBe(1);
-    sqlite.query("UPDATE inbox_classification_jobs SET status = 'running', claim_token = 'interrupted-process', available_at = 90_000 WHERE memo_id = ?").run(memo.id);
+    sqlite.query("UPDATE inbox_classification_jobs SET status = 'running', claim_token = 'interrupted-process', available_at = 90000 WHERE memo_id = ?").run(memo.id);
     await classify(async () => ({ notebookId: "nb_projects", tags: [] }), 90_001);
     expect(job(memo.id)).toMatchObject({ status: "moved", attempts: 2 });
     expect((await get(memo.id)).notebookId).toBe("nb_projects");
@@ -127,12 +127,12 @@ test("temporary provider failures retry and a claim interrupted by a restart can
 });
 
 test("human moves and edits during inference take precedence", async () => {
-  await withFixture(async ({ create, classify, get, job, context }) => {
+  await withFixture(async ({ create, classify, get, job, env }) => {
     const memo = await create();
     await classify(async () => {
-      await executeWorkspaceTool(context, auth, "update_memo", {
-        memoId: memo.id, notebookId: "nb_learning", title: "用户已另行归档",
-      });
+      await updateMemoRecord(env.storage.db, workspaceId, memo.id, {
+        notebookId: "nb_learning", title: "用户已另行归档",
+      }, { actorType: "user", actorId: null }, "user");
       return { notebookId: "nb_projects", tags: ["不应写入"] };
     });
     expect(job(memo.id)).toMatchObject({ status: "retained", outcome: "source_changed" });
