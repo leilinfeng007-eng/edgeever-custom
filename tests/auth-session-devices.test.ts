@@ -4,7 +4,7 @@ import {
   groupLoginDeviceSessions,
   resolveSessionDeviceId,
   type LoginDeviceSessionRow,
-} from "../apps/api/src/auth-session-devices";
+} from "../apps/api/src/auth/auth-session-devices";
 
 describe("login device sessions", () => {
   test("accepts an optional stable client device id", () => {

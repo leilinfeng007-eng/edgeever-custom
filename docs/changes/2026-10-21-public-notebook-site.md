@@ -60,7 +60,7 @@ R01–R13 and the final behavior above are implemented. Product changes map to t
 Reproducible required checks:
 
 ```sh
-bun test apps/api/src/notebook-share-routes.test.mjs tests/note-sharing-menu.test.ts packages/shared/src/i18n/catalog.test.mjs apps/web/src/components/dialogs/ShareQrCode.test.mjs
+bun test apps/api/src/notes/notebook-share-routes.test.mjs tests/note-sharing-menu.test.ts packages/shared/src/i18n/catalog.test.mjs apps/web/src/components/dialogs/ShareQrCode.test.mjs
 bun test tests/deployment-entrypoints.test.ts
 bun test apps/web/src/lib/editor-heading-anchor.test.mjs
 bunx playwright test tests/e2e/public-notebook-indexing.spec.ts

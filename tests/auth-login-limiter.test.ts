@@ -6,8 +6,8 @@ import {
   clearLoginAttempts,
   recordLoginFailure,
   resolveLoginRateLimitConfig,
-} from "../apps/api/src/auth-login-limiter";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter";
+} from "../apps/api/src/auth/auth-login-limiter";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter";
 
 const createDatabase = () => {
   const sqlite = new Database(":memory:");

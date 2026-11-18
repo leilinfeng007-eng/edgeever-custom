@@ -1,6 +1,6 @@
 import type { Context } from "hono";
-import type { CloudflareStorageBindings } from "./cloudflare-storage-adapter";
-import type { StorageAdapter } from "./storage-contract";
+import type { CloudflareStorageBindings } from "./storage/cloudflare-storage-adapter";
+import type { StorageAdapter } from "./storage/storage-contract";
 
 export type Bindings = {
   /** Runtime driver for public-only egress; no platform-specific business logic. */

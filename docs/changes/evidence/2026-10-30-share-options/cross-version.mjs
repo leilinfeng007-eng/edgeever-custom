@@ -6,8 +6,8 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Database } from 'bun:sqlite';
 import { Hono } from 'hono';
-import * as current from '../../../../apps/api/src/share-routes.ts';
-import { renderPublicMemoSharePage } from '../../../../apps/api/src/share-page.ts';
+import * as current from '../../../../apps/api/src/notes/share-routes.ts';
+import { renderPublicMemoSharePage } from '../../../../apps/api/src/notes/share-page.ts';
 const baseline = 'e052ac3b54bdcba4b2c452e6b06c091b1e2c70f4';
 const oldRoute = resolve(`apps/api/src/.714-baseline-${process.pid}.ts`);
 const oldSchema = resolve(`packages/shared/src/.714-baseline-${process.pid}.ts`);
@@ -42,7 +42,7 @@ const results = { baseline, checks: [] };
 const check = (name) => results.checks.push(name);
 try {
   writeFileSync(oldSchema, execFileSync('git', ['show', `${baseline}:packages/shared/src/schemas.ts`]));
-  const oldSource = execFileSync('git', ['show', `${baseline}:apps/api/src/share-routes.ts`], {encoding:'utf8'});
+  const oldSource = execFileSync('git', ['show', `${baseline}:apps/api/src/notes/share-routes.ts`], {encoding:'utf8'});
   writeFileSync(oldRoute, oldSource.replace('MemoShareUpdateSchema, ', '') + `\nimport { MemoShareUpdateSchema } from ${JSON.stringify(oldSchema)};\n`);
   const old = appFor(await import(pathToFileURL(oldRoute).href));
   for (const file of globSync('migrations/*.sql').sort()) {

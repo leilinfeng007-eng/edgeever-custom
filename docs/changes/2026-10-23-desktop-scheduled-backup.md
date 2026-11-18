@@ -74,7 +74,7 @@ The current contribution branch passed `bun run typecheck`, `bun run typecheck:m
 ### Reproduction entry points
 
 ```sh
-bun test apps/api/src/backup-consistency.test.mjs apps/api/src/backup-routes.test.mjs apps/api/src/backup-restore.test.mjs
+bun test apps/api/src/backup/backup-consistency.test.mjs apps/api/src/backup/backup-routes.test.mjs apps/api/src/backup/backup-restore.test.mjs
 bun test tests/json-backup.test.ts tests/json-backup-zip64.test.ts tests/markdown-export.test.ts
 bun test apps/desktop/src/backup/encrypted-archive.test.mjs apps/desktop/src/backup/worker-integration.test.mjs
 bun test apps/desktop/src/main/backup-settings.test.mjs apps/desktop/src/main/backup-manager.test.mjs apps/desktop/src/main/backup-ipc.test.mjs

@@ -228,9 +228,9 @@ GCM 的流式输出在最终认证前不能视为可信，因此禁止把解密�
 ## 11. 现有实现与来源
 
 - [当前 ZIP 导入导出](../apps/web/src/lib/json-backup.ts)与[格式定义](../packages/shared/src/backup.ts)：复用业务格式和恢复语义，补齐 ZIP64 与加密容器。
-- [备份路由](../apps/api/src/backup-routes.ts)、[恢复服务](../apps/api/src/backup-service.ts)与[同步变更 migration](../migrations/0013_mobile_sync_changes.sql)：新增完整版本校验，不扩大旧同步游标的含义。
+- [备份路由](../apps/api/src/backup/backup-routes.ts)、[恢复服务](../apps/api/src/backup/backup-service.ts)与[同步变更 migration](../migrations/0013_mobile_sync_changes.sql)：新增完整版本校验，不扩大旧同步游标的含义。
 - [导入导出卡片](../apps/web/src/components/settings/DataExportCard.tsx)、[渲染器休眠](../apps/desktop/src/main/renderer-hibernate.mjs)与[账号隔离](../apps/desktop/src/main/account-scope.mjs)：沿用现有入口，后台任务独立于渲染器。
-- [跨运行时存储契约](../apps/api/src/storage-contract.ts)与[自托管架构](self-hosting-architecture.zh-CN.md)：一致性逻辑不能只在 Cloudflare 入口实现。
+- [跨运行时存储契约](../apps/api/src/storage/storage-contract.ts)与[自托管架构](self-hosting-architecture.zh-CN.md)：一致性逻辑不能只在 Cloudflare 入口实现。
 - [原备份与容灾方案](https://github.com/tianma-if/edgeever/blob/main/docs/backup-and-disaster-recovery-plan.zh-CN.md)：保留本地目录协同路线，本设计细化 Issue #650 的交付边界与恢复条件。
 
 ## 12. WebDAV 异地副本（P2，Issue #723）

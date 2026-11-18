@@ -2,7 +2,7 @@
   "status": "passed",
   "commands": [
     {
-      "command": "bun test apps/api/src/share-routes.test.mjs apps/api/src/share-page.test.mjs apps/api/src/notebook-share-routes.test.mjs packages/shared/src/sharing.test.mjs apps/web/src/components/dialogs/ShareMemoDialog.test.mjs tests/note-sharing-menu.test.ts",
+      "command": "bun test apps/api/src/notes/share-routes.test.mjs apps/api/src/notes/share-page.test.mjs apps/api/src/notes/notebook-share-routes.test.mjs packages/shared/src/sharing.test.mjs apps/web/src/components/dialogs/ShareMemoDialog.test.mjs tests/note-sharing-menu.test.ts",
       "exitCode": 0,
       "result": "81 pass, 0 fail",
       "output": "share-tests.txt"

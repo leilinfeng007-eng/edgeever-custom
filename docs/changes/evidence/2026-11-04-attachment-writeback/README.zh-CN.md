@@ -17,7 +17,7 @@
 在仓库根目录执行，使用现有依赖，不接触生产实例或安装在 Applications 中的 EdgeEver：
 
 ```sh
-bun test apps/desktop/src/main/attachment-open.test.mjs apps/desktop/src/main/attachment-writeback.test.mjs apps/desktop/src/main/attachment-writeback-ipc.test.mjs apps/desktop/src/main/resource-protocol.test.mjs tests/attachment-writeback.integration.test.mjs apps/api/src/resource-routes.test.mjs apps/api/src/resource-service.test.mjs apps/api/src/resource-upload-integration.test.mjs
+bun test apps/desktop/src/main/attachment-open.test.mjs apps/desktop/src/main/attachment-writeback.test.mjs apps/desktop/src/main/attachment-writeback-ipc.test.mjs apps/desktop/src/main/resource-protocol.test.mjs tests/attachment-writeback.integration.test.mjs apps/api/src/attachments/resource-routes.test.mjs apps/api/src/attachments/resource-service.test.mjs apps/api/src/attachments/resource-upload-integration.test.mjs
 EDGE_EVER_DESKTOP_BUILD=1 bun run build:web
 bun run build:desktop:sidecar
 bun apps/desktop/scripts/build-backup-worker.mjs

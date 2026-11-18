@@ -3,9 +3,9 @@ import { Database } from "bun:sqlite";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clampNumber } from "./entity-utils.ts";
+import { clampNumber } from "./common/entity-utils.ts";
 import { fetchEdgeEverApp } from "./index.ts";
-import { createSelfHostedStorageAdapter } from "./self-hosted-storage-adapter.ts";
+import { createSelfHostedStorageAdapter } from "./storage/self-hosted-storage-adapter.ts";
 
 const temporaryDirectories = [];
 const databases = [];

@@ -7,9 +7,9 @@ EdgeEver 通过 Docker 支持 VPS、NAS 和家庭服务器自托管，同时不�
 ## 当前边界
 
 API 的业务逻辑和路由逻辑应依赖
-`apps/api/src/storage-contract.ts` 中的存储契约，而不是直接依赖
+`apps/api/src/storage/storage-contract.ts` 中的存储契约，而不是直接依赖
 Cloudflare SDK 类型。目前的具体实现位于
-`apps/api/src/cloudflare-storage-adapter.ts`：
+`apps/api/src/storage/cloudflare-storage-adapter.ts`：
 
 - `DatabaseAdapter`：SQL 语句与批处理。
 - `BlobStoreAdapter`：附件的 `get`、`put` 和 `delete` 操作。

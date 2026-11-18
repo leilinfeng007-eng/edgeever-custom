@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { globSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createLocalDevelopmentSession } from "./local-dev-auth.mjs";
-import { verifyPassword } from "../apps/api/src/auth-crypto.ts";
+import { verifyPassword } from "../apps/api/src/auth/auth-crypto.ts";
 
 const databases = [];
 const createDatabase = () => {

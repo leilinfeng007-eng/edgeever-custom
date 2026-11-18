@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
-import { hashPassword } from "../apps/api/src/auth-crypto.ts";
+import { hashPassword } from "../apps/api/src/auth/auth-crypto.ts";
 
 // Development fixtures only: never imported by either production runtime.
 // Reuse the owner of the existing local workspace without changing credentials.

@@ -146,7 +146,7 @@ describe("Docker release contract", () => {
       "fetchEdgeEverApp(request, env, executionContext)",
     );
     expect(selfHosted).toContain(
-      'await import("../apps/api/src/s3-compatible-storage-adapter.ts")',
+      'await import("../apps/api/src/storage/s3-compatible-storage-adapter.ts")',
     );
     expect(selfHosted).not.toContain(
       'import { createS3CompatibleStorageAdapter } from',

@@ -58,7 +58,7 @@ export const buildTotpStatusSql = (username) =>
   SELECT id FROM users WHERE username = ${sqlString(username)} AND is_disabled = 0 LIMIT 1
 ) AND enabled_at IS NOT NULL LIMIT 1`;
 
-// Mirrors MFA_PASSWORD_HASH_ALGORITHM in apps/api/src/auth-crypto.ts: an account
+// Mirrors MFA_PASSWORD_HASH_ALGORITHM in apps/api/src/auth/auth-crypto.ts: an account
 // with TOTP enabled keeps its hash under the "-mfa" tag so a backend that predates
 // TOTP fails closed for it after a rollback. A reset must not drop that tag.
 const PLAIN_HASH_ALGORITHM = "pbkdf2-sha256";

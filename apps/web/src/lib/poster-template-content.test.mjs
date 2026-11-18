@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { PosterDocumentSchema, createPosterDocument, parsePosterDocument, serializePosterDocument } from "@edgeever/shared";
-import { compilePosterMemo } from "../../../api/src/mcp-poster-tools";
+import { compilePosterMemo } from "../../../api/src/mcp/mcp-poster-tools";
 import { composePosterTemplate, hasPosterSections, posterTemplateHeaderHeight } from "./poster-template-content";
 
 const sections = Array.from({ length: 6 }, (_, i) => ({ heading: `业务 ${i + 1}`, body: `保留业务说明 ${i + 1}` }));

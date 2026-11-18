@@ -6,4 +6,4 @@
 
 备份含一个笔记本、一篇置顶且带标签的笔记、一条历史版本，以及 PNG、无脚本的 SVG、MIME 为 null 的图片和可下载的 HTML 附件。MIME 为 null 的图片使用 `.bin` 文件名，避免按文件扩展名推断类型，实际覆盖既有二进制回退。不含凭据、用户数据、脚本或外部请求。安全回归测试分别通过旧式和分片 API 恢复这份固定备份，再读回数据及附件字节。
 
-运行：`bun test apps/api/src/resource-restore-security.test.mjs`。
+运行：`bun test apps/api/src/attachments/resource-restore-security.test.mjs`。

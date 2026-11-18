@@ -5,7 +5,7 @@ import { renderThemedMermaidSvg } from "/src/lib/mermaid-renderer.ts";
 import { normalizeMermaidSvgForViewer } from "/src/lib/mermaid-svg.ts";
 import { MERMAID_THEME_PALETTES } from "/src/components/ThemeProvider.tsx";
 import "/src/styles/note-prose-styles.css";
-import demoSeed from "../../../apps/api/src/demo-seed-data.ts?raw";
+import demoSeed from "../../../apps/api/src/workspace/demo-seed-data.ts?raw";
 
 const readDemoSource = (heading) => {
   const start = demoSeed.indexOf("flowchart", demoSeed.indexOf(heading));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { Database } from "bun:sqlite";
 import { fetchEdgeEverApp } from "../apps/api/src/index.ts";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter.ts";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter.ts";
 import { _electron as electron, expect } from "@playwright/test";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

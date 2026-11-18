@@ -17,7 +17,7 @@ The app shell and its `<html lang>` are unchanged. Choosing the page language fr
 
 ## Verification
 
-- `apps/api/src/share-page.test.mjs` has a regression test for these attributes and for the untitled fallback title.
+- `apps/api/src/notes/share-page.test.mjs` has a regression test for these attributes and for the untitled fallback title.
 - I checked the first HTML response of a share from a self-hosted build of this branch with `curl`.
 
 ## Rollback

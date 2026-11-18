@@ -22,7 +22,7 @@ globalThis.MutationObserver = class { observe() {} disconnect() {} };
 
 const shared = await import("@edgeever/shared");
 const { fetchEdgeEverApp } = await import("../apps/api/src/index.ts");
-const { createSelfHostedStorageAdapter } = await import("../apps/api/src/self-hosted-storage-adapter.ts");
+const { createSelfHostedStorageAdapter } = await import("../apps/api/src/storage/self-hosted-storage-adapter.ts");
 const { createEdgeEverClient } = await import("../packages/client/src/index.ts");
 const { api } = await import("../apps/web/src/lib/api.ts");
 const { createWebRepository } = await import("../apps/web/src/lib/repository.ts");

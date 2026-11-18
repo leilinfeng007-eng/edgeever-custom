@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { BlobReader, ZipReader, ZipWriter, Uint8ArrayWriter, Uint8ArrayReader } from "@zip.js/zip.js/index-native.js";
 import { pack } from "it-tar";
 import { fetchEdgeEverApp } from "../apps/api/src/index.ts";
-import { createSelfHostedStorageAdapter } from "../apps/api/src/self-hosted-storage-adapter.ts";
+import { createSelfHostedStorageAdapter } from "../apps/api/src/storage/self-hosted-storage-adapter.ts";
 import { createEdgeEverClient } from "../packages/client/src/index.ts";
 import { docToMarkdown, markdownToDoc } from "../packages/shared/src/index.ts";
 import { NoteImportSession, MemoryImportIndex } from "../packages/shared/src/note-import/index.ts";

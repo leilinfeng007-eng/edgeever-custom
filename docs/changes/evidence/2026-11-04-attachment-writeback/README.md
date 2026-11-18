@@ -17,7 +17,7 @@ The test uses an isolated macOS Electron profile, the real Rust sidecar, shared 
 Run from the repository root using existing dependencies, without production instances or the installed Applications copy of EdgeEver:
 
 ```sh
-bun test apps/desktop/src/main/attachment-open.test.mjs apps/desktop/src/main/attachment-writeback.test.mjs apps/desktop/src/main/attachment-writeback-ipc.test.mjs apps/desktop/src/main/resource-protocol.test.mjs tests/attachment-writeback.integration.test.mjs apps/api/src/resource-routes.test.mjs apps/api/src/resource-service.test.mjs apps/api/src/resource-upload-integration.test.mjs
+bun test apps/desktop/src/main/attachment-open.test.mjs apps/desktop/src/main/attachment-writeback.test.mjs apps/desktop/src/main/attachment-writeback-ipc.test.mjs apps/desktop/src/main/resource-protocol.test.mjs tests/attachment-writeback.integration.test.mjs apps/api/src/attachments/resource-routes.test.mjs apps/api/src/attachments/resource-service.test.mjs apps/api/src/attachments/resource-upload-integration.test.mjs
 EDGE_EVER_DESKTOP_BUILD=1 bun run build:web
 bun run build:desktop:sidecar
 bun apps/desktop/scripts/build-backup-worker.mjs

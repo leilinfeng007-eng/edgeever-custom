@@ -20,7 +20,7 @@
 | --- | --- | --- |
 | `apps/web/src/components/SettingsPane.tsx` | Web 使用 `DataExportCard`，桌面使用 `DesktopScheduledBackupCard` | 保留两个备份入口，以第三方导入卡替换指南卡，卡内保留指南链接 |
 | `packages/shared/src/backup-archive.ts` | 使用 `@zip.js/zip.js` 2.24.0，支持 ZIP64、按条目读取与流式恢复 | 复用依赖及读取方式，不要求第三方 ZIP 携带 EdgeEver manifest，不改备份格式 |
-| `apps/api/src/memo-service.ts::importMemosRecord` | 每批 1–25 篇、逐项结果、时间戳导入、`source + externalId` 幂等；通过数据库适配层写入 | 增加薄 REST 入口复用该服务，不另写一套创建笔记逻辑，不改变 MCP 的既有语义 |
+| `apps/api/src/notes/memo-service.ts::importMemosRecord` | 每批 1–25 篇、逐项结果、时间戳导入、`source + externalId` 幂等；通过数据库适配层写入 | 增加薄 REST 入口复用该服务，不另写一套创建笔记逻辑，不改变 MCP 的既有语义 |
 | `packages/client/src/index.ts` | 普通创建可传时间戳；资源支持分片上传；正文更新需要编辑会话与版本保护 | 增加导入方法，并为 `updateMemo` 类型补齐服务端已支持的可选时间字段 |
 | `apps/web/src/lib/desktop-sync.ts` | `pauseDesktopSyncForImport()` 等待在途同步并返回释放函数 | 在确认写入后持有，所有退出路径释放；先释放，再刷新工作区 |
 | `crates/desktop-sidecar/src/memo.rs::create_memo` | 普通本地创建依赖数据库生成时间，不读取导入时间字段 | 不把本次导入接到普通本地创建，避免扩展 Rust 存储和离线队列协议 |
@@ -86,7 +86,7 @@ ENEX 第一遍只扫描元数据和资源大小，确认后第二遍按文件顺
 
 ### 接口增量
 
-在 `apps/api/src/import-routes.ts` 增加：
+在 `apps/api/src/notes/import-routes.ts` 增加：
 
 - `GET /api/v1/imports/capabilities`：返回协议版本及现有批次上限；开始写入前检测支持情况。旧服务端不支持时仅提示升级服务端，原编辑、同步和备份功能保持可用。
 - `POST /api/v1/imports/memos`：接受 `importId`、来源类型、目标笔记本、条目和 `dryRun`，校验后调用现有 `importMemosRecord`。由服务端构造 `third-party-<format>-<importId>` 来源标识；每篇使用预检时固定的条目 ID，符合既有 80/512 字符来源键限制。返回逐项创建、跳过和失败结果。

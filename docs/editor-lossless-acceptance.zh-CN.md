@@ -45,4 +45,4 @@
 - 含待办列表的富文本表格单元格现在可安全接收源码中的待办文字修改和勾选状态切换，并保留原有列表结构。若修改无法安全映射回富文本，例如改变表格形状，编辑器撤回该次修改并给出说明；用户可在富文本视图中修改结构。其他富文本专有结构仍须按上述样本逐项验证，不能仅凭该案例宣称 D 全面通过。
 - Windows 10 / Chrome 154 的真实复验和全部样本的保存后重开尚未完成。真实旧版本跨版本验证也尚未完成；如引入存储或跨版本读取变更，须以此作为发布门禁。现有证据不足以宣称 Issue #469 已满足完整无损验收。
 
-相关实现：[`editor-mode-content.ts`](../apps/web/src/components/editor/editor-mode-content.ts)、[`useEditorMarkdownMode.ts`](../apps/web/src/components/editor/useEditorMarkdownMode.ts)、[`content.ts`](../packages/shared/src/content.ts)、[`memo-service.ts`](../apps/api/src/memo-service.ts)。
+相关实现：[`editor-mode-content.ts`](../apps/web/src/components/editor/editor-mode-content.ts)、[`useEditorMarkdownMode.ts`](../apps/web/src/components/editor/useEditorMarkdownMode.ts)、[`content.ts`](../packages/shared/src/content.ts)、[`memo-service.ts`](../apps/api/src/notes/memo-service.ts)。

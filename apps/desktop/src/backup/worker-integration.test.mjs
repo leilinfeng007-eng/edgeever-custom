@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { createServer } from "node:http";
 import { fetchEdgeEverApp } from "../../../api/src/index.ts";
-import { createSelfHostedStorageAdapter } from "../../../api/src/self-hosted-storage-adapter.ts";
+import { createSelfHostedStorageAdapter } from "../../../api/src/storage/self-hosted-storage-adapter.ts";
 import { BackupManager } from "../main/backup-manager.mjs";
 import { createEdgeEverClient } from "../../../../packages/client/src/index.ts";
 

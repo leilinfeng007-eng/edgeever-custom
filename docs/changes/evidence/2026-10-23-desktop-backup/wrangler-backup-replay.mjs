@@ -9,7 +9,7 @@ import { createServer } from 'node:net';
 import assert from 'node:assert/strict';
 const repo=process.cwd();
 const {fetchEdgeEverApp}=await import(`${repo}/apps/api/src/index.ts`);
-const {createSelfHostedStorageAdapter}=await import(`${repo}/apps/api/src/self-hosted-storage-adapter.ts`);
+const {createSelfHostedStorageAdapter}=await import(`${repo}/apps/api/src/storage/self-hosted-storage-adapter.ts`);
 const {createEdgeEverClient}=await import(`${repo}/packages/client/src/index.ts`);
 const root=await mkdtemp(join(tmpdir(),'edgeever-wrangler-restore-'));const children=[];let source,db,api;const log=await open(join(root,'wrangler.log'),'w');
 const freePort=async()=>{const s=createServer();await new Promise(r=>s.listen(0,'127.0.0.1',r));const p=s.address().port;await new Promise(r=>s.close(r));return p;};

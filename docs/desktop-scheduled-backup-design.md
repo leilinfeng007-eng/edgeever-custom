@@ -228,9 +228,9 @@ Record platform, cross-version, and large-archive evidence separately. A small-f
 ## 11. Existing implementation and sources
 
 - [Current ZIP import/export](../apps/web/src/lib/json-backup.ts) and [format definitions](../packages/shared/src/backup.ts): retain logical format and restore semantics while adding ZIP64 and the encrypted container.
-- [Backup routes](../apps/api/src/backup-routes.ts), [restore service](../apps/api/src/backup-service.ts), and [sync-change migration](../migrations/0013_mobile_sync_changes.sql): add complete revision coverage without redefining the synchronization cursor.
+- [Backup routes](../apps/api/src/backup/backup-routes.ts), [restore service](../apps/api/src/backup/backup-service.ts), and [sync-change migration](../migrations/0013_mobile_sync_changes.sql): add complete revision coverage without redefining the synchronization cursor.
 - [Import/export card](../apps/web/src/components/settings/DataExportCard.tsx), [renderer hibernation](../apps/desktop/src/main/renderer-hibernate.mjs), and [account isolation](../apps/desktop/src/main/account-scope.mjs): retain existing entry points while keeping background work independent of the renderer.
-- [Cross-runtime storage contracts](../apps/api/src/storage-contract.ts) and [self-hosting architecture](self-hosting-architecture.md): do not implement consistency logic only in the Cloudflare entry point.
+- [Cross-runtime storage contracts](../apps/api/src/storage/storage-contract.ts) and [self-hosting architecture](self-hosting-architecture.md): do not implement consistency logic only in the Cloudflare entry point.
 - [Original backup and disaster-recovery proposal](https://github.com/tianma-if/edgeever/blob/main/docs/backup-and-disaster-recovery-plan.zh-CN.md): retain the local-directory approach while specifying Issue #650's delivery boundaries and recovery requirements.
 
 ## 12. Off-site WebDAV copy (P2, Issue #723)

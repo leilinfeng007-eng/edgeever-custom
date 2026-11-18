@@ -3,7 +3,7 @@ import {
   hasBootstrapCredential,
   isSupportedPasswordHash,
   verifyBootstrapPassword,
-} from "../apps/api/src/auth-bootstrap";
+} from "../apps/api/src/auth/auth-bootstrap";
 
 const rejectHash = async () => false;
 

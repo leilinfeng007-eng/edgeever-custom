@@ -8,8 +8,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, randomBytes } from "node:crypto";
 import { fetchEdgeEverApp } from "../../../../api/src/index.ts";
-import { createSelfHostedStorageAdapter } from "../../../../api/src/self-hosted-storage-adapter.ts";
-import { RESOURCE_UPLOAD_PART_BYTES } from "../../../../api/src/resource-upload-service.ts";
+import { createSelfHostedStorageAdapter } from "../../../../api/src/storage/self-hosted-storage-adapter.ts";
+import { RESOURCE_UPLOAD_PART_BYTES } from "../../../../api/src/attachments/resource-upload-service.ts";
 import { createEdgeEverClient } from "../../../../../packages/client/src/index.ts";
 
 const require = createRequire(new URL("../../../package.json", import.meta.url));
