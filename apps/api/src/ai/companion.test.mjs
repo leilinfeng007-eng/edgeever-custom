@@ -462,7 +462,7 @@ describe("companion client-direct HTTP contracts", () => {
     expect(body.messages.at(-1).content).toBe(payload.message);
     expect(body.tools.some(tool => tool.name === "search_memos")).toBe(true);
     expect(body.tools.some(tool => tool.name === "todo_write")).toBe(true);
-    expect(body.maxSteps).toBe(8);
+    expect(body.maxSteps).toBe(16);
     expect((await request("turns/prepare", "POST", payload)).status).toBe(409);
   });
 

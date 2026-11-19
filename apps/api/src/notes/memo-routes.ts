@@ -24,6 +24,8 @@ import type { ListMemosInput, ListMemosResult } from "./memo-list-service";
 import { getActorLabel, getAuditActor, getWorkspaceId, requireScopes } from "../auth/request-auth";
 import { deleteReleasedResourceObjects } from "../attachments/resource-service";
 import type { DatabaseAdapter } from "../storage/storage-contract";
+import type { MemoMutationCommit } from "./memo-service";
+import { notebookClassificationChoice } from "../ai/inbox-classification";
 type MemoRouteDependencies = {
   clampNumber: (value: number, min: number, max: number) => number;
   createImageResource: (context: AppContext, input: {
@@ -99,6 +101,7 @@ type MemoRouteDependencies = {
     notebookId: string,
     actor: AuditActor,
     actorLabel: string,
+    commit?: MemoMutationCommit,
   ) => Promise<number>;
   restoreMemo: (
     database: DatabaseAdapter,
@@ -122,6 +125,7 @@ type MemoRouteDependencies = {
     actor: AuditActor,
     actorLabel: string,
     requireEditSession: boolean,
+    commit?: MemoMutationCommit,
   ) => Promise<
     | { memo: MemoDetail; releasedResources?: { objectKey: string; storageConfigId: string }[]; error?: never; message?: never; status?: never; details?: never }
     | { error: string; message: string; status?: number; details?: Record<string, unknown> }
@@ -273,6 +277,7 @@ export const registerMemoRoutes = (
         input.notebookId,
         getAuditActor(context),
         getActorLabel(context),
+        { before: [], after: () => notebookClassificationChoice(context.env, context.get("auth"), input.memoIds, input.notebookId) },
       );
       return context.json({ ok: true, moved });
     } catch (error) {
@@ -348,6 +353,8 @@ export const registerMemoRoutes = (
   });
 
   const updateMemo = async (context: AppContext, memoId: string, input: MemoUpdateInput) => {
+    const previous = input.notebookId === undefined ? null
+      : await dependencies.getMemoDetail(context.env.storage.db, getWorkspaceId(context), memoId);
     const result = await dependencies.updateMemo(
       context.env.storage.db,
       getWorkspaceId(context),
@@ -356,6 +363,9 @@ export const registerMemoRoutes = (
       getAuditActor(context),
       getActorLabel(context),
       true,
+      input.notebookId === undefined || previous?.notebookId === input.notebookId ? undefined : {
+        before: [], after: () => notebookClassificationChoice(context.env, context.get("auth"), [memoId], input.notebookId!),
+      },
     );
     if ("error" in result) {
       return context.json(

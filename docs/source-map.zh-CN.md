@@ -1,8 +1,8 @@
-# 源码导航（本地 v2.28.0 自定义版）
+# 源码导航（v2.28.2 自定义版）
 
 [English](source-map.md) · [项目入口](../README.md) · [完整产品说明](readme/README.zh-CN.md) · [贡献指南](CONTRIBUTING.zh-CN.md)
 
-本目录以交付时的本地自定义源码为基线。整理目录、引用与注释时保留已有产品逻辑；没有用上游版本覆盖这份快照。后端文件名保留原名，方便在 Cursor 中按功能名搜索。
+本版以官方 v2.28.2 为基线，保留自定义源码目录、MCP 附件和笔记归类功能。后端文件名保留原名，方便在 Cursor 中按功能名搜索。
 
 ## 系统组成
 
@@ -69,3 +69,5 @@ bun test ./scripts/readme-assets.test.mjs ./scripts/sync-readme-contributors.tes
 `bun run dev` 启动 Web 与 API；自托管入口为 `scripts/self-hosted-server.mjs`，Worker 配置在 `wrangler.toml`。模块内 `*.test.mjs` 为近代码测试，`tests/` 为跨模块测试，`tests/e2e/` 为需要浏览器/实例的端到端测试。`test:integration` 将已知需要隔离的测试单独运行。Android 调测只用 USB 真机。
 
 更多指南：[MCP](mcp-guide.zh-CN.md)、[AI/ACP](acp-note-access.zh-CN.md)、[本地开发](local-dev-reset.zh-CN.md)、[Docker](deploy-docker.zh-CN.md)、[Cloudflare](agent-deploy-cloudflare.zh-CN.md)。
+
+内置助手附件读取在 `ai/companion-agent-tools.ts`，图像模型消息适配在 `packages/client/src/companion-model-messages.ts`。原回答保存及幂等回执在 `ai/companion-save-response.ts`；分类状态的列表卡片与详情分别在 `InboxClassificationPanel.tsx`、`NoteClassificationDetails.tsx`。

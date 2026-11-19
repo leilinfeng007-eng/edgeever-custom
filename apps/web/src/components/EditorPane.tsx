@@ -1,3 +1,4 @@
+import { NoteClassificationDetails } from "./NoteClassificationDetails";
 import { AttachmentTextDialog, type AttachmentTextTarget } from "./editor/AttachmentTextDialog";
 import { autoUpdate } from "@floating-ui/react-dom";
 import { AI_ASSISTANT_LAUNCHER_POSITION } from "@/lib/ai-assistant-launcher";
@@ -516,6 +517,7 @@ const RichEditorPane = ({
   const [imageUploadState, setImageUploadState] = useState<"idle" | "compressing" | "uploading" | "error">("idle");
   const [imagePreview, setImagePreview] = useState<ImagePreviewRequestDetail | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [classificationDetailsOpen, setClassificationDetailsOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpenState] = useState(readAiSidebarOpen);
   const setAiSidebarOpen = useCallback((open: boolean) => {
     setAiAssistantOpenState(open);
@@ -546,6 +548,7 @@ const RichEditorPane = ({
   });
   const [mathFormulaOpen, setMathFormulaOpen] = useState(false);
   const [attachmentTranscript, setAttachmentTranscript] = useState<AttachmentTranscript | null>(null);
+  const [attachmentTextTarget, setAttachmentTextTarget] = useState<AttachmentTextTarget | null>(null);
   const attachmentTranscriptAbortRef = useRef<AbortController | null>(null);
   const [mathFormulaDraft, setMathFormulaDraft] = useState<MathFormulaDraft | null>(null);
   const {
@@ -4105,7 +4108,6 @@ const RichEditorPane = ({
     });
   };
 
-  const [attachmentTextTarget, setAttachmentTextTarget] = useState<AttachmentTextTarget | null>(null);
   const resourceMenuLabels = {
     download: t("editor.resourceActions.download"),
     copy: t("editor.resourceActions.copy"),
@@ -4550,7 +4552,11 @@ const RichEditorPane = ({
                     contentClassName="z-[110] max-w-xs whitespace-normal"
                     label={t("editor.copyToWeChatTooltip")}
                   >
-                    <DropdownMenuItem
+                    <DropdownMenuItem onSelect={() => setClassificationDetailsOpen(true)}>
+                    <Sparkles className="h-4 w-4 text-slate-500" />
+                    {t("inboxClassification.details")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                       className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
                       disabled={!editor || useMobilePlainTextEditor || wechatCopyState === "copying"}
                       onClick={() => void handleCopyToWeChat()}
@@ -5172,6 +5178,7 @@ const RichEditorPane = ({
       )}
 
       {imgBedFailureDialog}
+      <NoteClassificationDetails key={memo.id} memoId={memo.id} workspaceKey={localDataScope} open={classificationDetailsOpen} onOpenChange={setClassificationDetailsOpen} />
       <ShareMemoDialog memoId={memo.id} open={shareOpen} onOpenChange={setShareOpen} />
 
       {imageShareSource && (

@@ -1,8 +1,8 @@
-# Source map (local v2.28.0 customized edition)
+# Source map (v2.28.2 customized edition)
 
 [简体中文](source-map.zh-CN.md) · [Project entry](../README.md) · [Full product guide](readme/README.md) · [Contributing](CONTRIBUTING.md)
 
-This layout preserves the supplied local customized source as its baseline. Directory, reference and comment changes do not replace it with upstream code. Backend filenames are retained so Cursor searches still find familiar feature names.
+This edition uses upstream v2.28.2 while retaining the customized layout, MCP attachment reader and note classification. Backend filenames are retained so Cursor searches still find familiar feature names.
 
 ## System components
 
@@ -69,3 +69,5 @@ bun test ./scripts/readme-assets.test.mjs ./scripts/sync-readme-contributors.tes
 `bun run dev` starts Web and API together. The self-hosted entry is `scripts/self-hosted-server.mjs`; Workers configuration lives in `wrangler.toml`. Module `*.test.mjs` files are colocated tests, `tests/` contains cross-module checks, and `tests/e2e/` requires browser/instance setup. `test:integration` runs known isolation-sensitive cases separately. Android debugging requires a USB physical device.
 
 More guides: [MCP](mcp-guide.md), [AI/ACP](acp-note-access.md), [local development](local-dev-reset.md), [Docker](deploy-docker.md), [Cloudflare](agent-deploy-cloudflare.md).
+
+Built-in attachment reading lives in `ai/companion-agent-tools.ts`; model image-message adaptation in `packages/client/src/companion-model-messages.ts`. Persisted-answer saves and idempotent receipts live in `ai/companion-save-response.ts`. Classification list cards and on-demand details live in `InboxClassificationPanel.tsx` and `NoteClassificationDetails.tsx`.

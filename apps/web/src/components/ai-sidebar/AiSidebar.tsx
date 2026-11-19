@@ -4,7 +4,7 @@ import * as m from "motion/react-m";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Download, FileText, Loader2, PanelRightClose, Plus, Sparkles, X } from "lucide-react";
 import type { CompanionAction, CompanionAnswer, CompanionEvent, CompanionFailureDiagnostics, CompanionTurn, CompanionTurnInput } from "@edgeever/shared";
-import { buildRevisionDiffRows, companionFailureDiagnostics, createMemoLinkHref } from "@edgeever/shared";
+import { buildRevisionDiffRows, companionAdviceOnly, companionFailureDiagnostics, createMemoLinkHref } from "@edgeever/shared";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -78,6 +78,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CompanionQuestionForm } from "../CompanionQuestionForm";
 import { CompanionCreatedNoteLinks } from "../CompanionCreatedNoteLinks";
+import { CompanionRunDetails } from "./CompanionRunDetails";
 import { AiSidebarMessage } from "./AiSidebarMessage";
 import { AiBodyDraftTurn } from "./AiBodyDraftTurn";
 import { useAiBodyDraft } from "./useAiBodyDraft";
@@ -473,6 +474,9 @@ function SidebarComposer({
   onLaunch,
   includeCurrentNote,
   currentNoteAvailable,
+  currentNoteLabel,
+  adviceOnly,
+  onAdviceOnlyChange,
   onIncludeCurrentNoteChange,
   onStop,
   skillPrompt,
@@ -487,9 +491,12 @@ function SidebarComposer({
   placeholder: string;
   onAddFiles: (files: File[]) => void;
   onRemoveAttachment: (id: string) => void;
-  onLaunch: (message: string, options?: { includeCurrentNote?: boolean }) => Promise<string>;
+  onLaunch: (message: string, options?: { includeCurrentNote?: boolean; readOnly?: boolean }) => Promise<string>;
   includeCurrentNote: boolean;
   currentNoteAvailable: boolean;
+  currentNoteLabel: string;
+  adviceOnly: boolean;
+  onAdviceOnlyChange: (value: boolean) => void;
   onIncludeCurrentNoteChange: (include: boolean) => void;
   onStop: () => void;
   skillPrompt: (id: SkillId, rest?: string) => string;
@@ -568,8 +575,14 @@ function SidebarComposer({
           await launch(skill ? skillPrompt(skill.id, skill.rest) : raw, undefined, Boolean(skill));
         }}
       >
-        {attachments.length ? (
-          <PromptInputHeader>
+        {attachments.length || (includeCurrentNote && currentNoteAvailable) ? (
+          <PromptInputHeader className="flex flex-wrap gap-1.5 px-3 pt-3">
+            {includeCurrentNote && currentNoteAvailable ? <div className="flex max-w-full items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs">
+              <FileText className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{t("assistantWorkspace.contextNote", { name: currentNoteLabel })}</span>
+              <Button type="button" variant="ghost" size="icon-xs" disabled={busy || locked}
+                aria-label={t("assistantWorkspace.removeNoteContext")} onClick={() => onIncludeCurrentNoteChange(false)}><X className="size-3" /></Button>
+            </div> : null}
             <AttachmentChips
               items={attachments.map((item) => ({
                 id: item.localId,
@@ -608,6 +621,10 @@ function SidebarComposer({
                 <TooltipContent>{t("aiAssistant.addAttachment")}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <Button type="button" size="sm" variant={adviceOnly ? "soft" : "ghost"}
+              aria-pressed={adviceOnly} disabled={busy || locked} onClick={() => onAdviceOnlyChange(!adviceOnly)}>
+              {t("assistantWorkspace.adviceOnly")}
+            </Button>
             {currentNoteAvailable ? (
               <Button
                 type="button"
@@ -732,6 +749,8 @@ function AiSidebarSession({
   const [turnFailures, setTurnFailures] = useState<Record<string, string>>({});
   const [useMemory, setUseMemory] = useState(false);
   const [includeCurrentNote, setIncludeCurrentNote] = useState(false);
+  const [adviceOnly, setAdviceOnly] = useState(false);
+  const [savedReplies, setSavedReplies] = useState<Record<string, { id: string; notebookId: string; title: string | null }>>({});
   const [composerFocusToken, setComposerFocusToken] = useState(0);
   const [selectionTurnKinds, setSelectionTurnKinds] = useState<Record<string, "explain" | "translate">>(readSelectionTurnKinds);
   const alive = useRef(true);
@@ -1109,6 +1128,7 @@ function AiSidebarSession({
     const text = message.trim();
     if (!text || locked.current || selectionPendingRef.current) throw new Error("busy");
     const useCurrentNote = options?.includeCurrentNote ?? includeCurrentNote;
+    const readOnly = (options?.readOnly ?? adviceOnly) || companionAdviceOnly(text);
     const focusAtSend = focusRef.current;
     const mode = readAiSidebarSource();
     setSource(mode);
@@ -1166,7 +1186,7 @@ function AiSidebarSession({
           adapterId: adapter.id,
           ...(adapter.path ? { path: adapter.path } : {}),
           prompt: text,
-          ...(options?.readOnly ? { noteAccess: false } : {}),
+          ...(readOnly ? { noteAccess: false } : {}),
           sessionKey: activeLocalThreadId,
           ...(noteContext ? { contextText: noteContext } : {}),
           ...(transcript ? { historyText: transcript } : {}),
@@ -1233,7 +1253,7 @@ function AiSidebarSession({
         message: text,
         useMemory,
         allowNotes: true,
-        allowWrites: !options?.readOnly,
+        allowWrites: !readOnly,
         locale: companionLocale(i18n.resolvedLanguage),
         ...(uploaded.length ? { attachmentIds: uploaded.map((item) => item.id) } : {}),
         ...(focus ? { focus } : {}),
@@ -1289,7 +1309,7 @@ function AiSidebarSession({
       setError(explainError(cause));
       throw cause;
     }
-  }, [applyStreamEvent, attachments, explainError, i18n.resolvedLanguage, includeCurrentNote, recoverTurn, restoreAttachments, t, threadId, useMemory]);
+  }, [adviceOnly, applyStreamEvent, attachments, explainError, i18n.resolvedLanguage, includeCurrentNote, recoverTurn, restoreAttachments, t, threadId, useMemory]);
 
   const rememberSelectionTurn = useCallback((id: string, kind: "explain" | "translate") => {
     setSelectionTurnKinds((current) => {
@@ -1537,6 +1557,49 @@ function AiSidebarSession({
     );
   };
 
+  const saveReply = async (turn: CompanionTurn, action: "create" | "append") => {
+    if (locked.current || acting) return;
+    const targetId = memoId;
+    if (action === "append" && !targetId) return;
+    locked.current = true;
+    setActing(true);
+    setError(null);
+    try {
+      await beforeCompanionApply?.();
+      const current = action === "append" ? (await api.getMemo(targetId!)).memo : null;
+      const result = await api.saveCompanionResponse(turn.id, { action,
+        ...(current ? { memoId: current.id, expectedRevision: current.revision } : {}),
+      });
+      if (alive.current) setSavedReplies(previous => ({ ...previous, [turn.id]: result.memo }));
+      await onCompanionNotesChanged?.();
+    } catch (cause) {
+      if (alive.current) setError(explainError(cause));
+    } finally {
+      locked.current = false;
+      if (alive.current) setActing(false);
+    }
+  };
+
+  const renderReplyActions = (turn: CompanionTurn) => {
+    if (turn.status !== "completed" || !turn.response.trim()) return null;
+    const saved = savedReplies[turn.id];
+    return <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <Button type="button" size="sm" variant="outline" disabled={running || acting} onClick={() => void saveReply(turn, "create")}>
+        {t("assistantWorkspace.saveNew")}
+      </Button>
+      {memoId ? <Button type="button" size="sm" variant="outline" disabled={running || acting} onClick={() => void saveReply(turn, "append")}>
+        {t("assistantWorkspace.append")}
+      </Button> : null}
+      {selectionPin && !selectionTurnKinds[turn.id] ? <Button type="button" size="sm" variant="outline" disabled={running || acting}
+        onClick={() => { if (!onReplaceSelection?.(turn.response)) setError(t("assistantWorkspace.selectionChanged")); }}>
+        {t("assistantWorkspace.replaceSelection")}
+      </Button> : null}
+      {saved ? <a className="text-xs underline" href={createMemoLinkHref(saved.id)} onClick={event => {
+        event.preventDefault(); event.stopPropagation(); onOpenCompanionNote?.(saved.id, saved.notebookId);
+      }}>{t("assistantWorkspace.saved", { name: saved.title || t("common.untitledMemo") })}</a> : null}
+    </div>;
+  };
+
   const renderActions = (turnId: string) => actions
     .filter((action) => action.turnId === turnId && action.status === "pending")
     .map((action) => {
@@ -1623,13 +1686,7 @@ function AiSidebarSession({
                     {t("aiAssistant.sidebar.working")}
                   </p>
                 ) : null}
-                {turn.tools?.length ? (
-                  <ul className="space-y-1 text-xs text-slate-500">
-                    {turn.tools.map((tool) => (
-                      <li key={tool.id}>{t("aiAssistant.sidebar.toolProgress", { name: tool.name, status: tool.status })}</li>
-                    ))}
-                  </ul>
-                ) : null}
+                <CompanionRunDetails turn={turn} />
                 {turn.response ? (
                   <AiSidebarMessage isAnimating={turn.status === "running"}>
                     {linkedCompanionText(turn.response, turn)}
@@ -1654,6 +1711,7 @@ function AiSidebarSession({
                 ) : null}
                 {renderSelectionReply(turn.id, turn.response, turn.status)}
                 {renderActions(turn.id)}
+                {renderReplyActions(turn)}
               </Message>
             </div>
             </Fragment>
@@ -1763,6 +1821,11 @@ function AiSidebarSession({
               {t(`aiAssistant.sidebar.skills.${skill.id}`)}
             </Button>
           ))}
+          {visibleCompanion && memoId ? (["readFiles", "extractTodos", "compareNotes"] as const).map(kind =>
+            <Button key={kind} type="button" size="sm" variant="outline" disabled={running || acting}
+              onClick={() => void launch(t(`assistantWorkspace.prompts.${kind}`), { includeCurrentNote: true, readOnly: true }).catch(() => undefined)}>
+              {t(`assistantWorkspace.shortcuts.${kind}`)}
+            </Button>) : null}
         </div>
         <PromptInputProvider>
           <SidebarComposer
@@ -1771,7 +1834,10 @@ function AiSidebarSession({
             busy={running}
             locked={acting || selectionPending}
             includeCurrentNote={includeCurrentNote}
-            currentNoteAvailable={Boolean(noteTitle?.trim() || contentMarkdown?.trim())}
+            currentNoteAvailable={Boolean(memoId || noteTitle?.trim() || contentMarkdown?.trim())}
+            currentNoteLabel={noteTitle?.trim() || t("common.untitledMemo")}
+            adviceOnly={adviceOnly}
+            onAdviceOnlyChange={setAdviceOnly}
             onIncludeCurrentNoteChange={setIncludeCurrentNote}
             placeholder={t("aiAssistant.sidebar.placeholder")}
             onAddFiles={(files) => { void addFiles(files); }}

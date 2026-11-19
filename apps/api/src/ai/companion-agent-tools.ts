@@ -1,3 +1,4 @@
+import { companionAdviceOnly } from "@edgeever/shared";
 import { COMPANION_NOTE_EDIT_MAX_CHARS, explicitDiagramKind, independentDiagramRequest, parseDiagramDocument, parseInfographicDocument, parseTableDocument, type CompanionSource, type CompanionTodo, type CompanionToolCall, type CompanionToolDefinition, type CompanionTurnInput, type MemoDetail, type MemoSummary } from "@edgeever/shared";
 import type { DatabaseAdapter } from "../storage/storage-contract";
 import type { AppContext } from "../api-context";
@@ -63,10 +64,12 @@ export type CompanionAgentSession = {
   metadataRemaining: number;
   cursor: number | null;
   inspected: Record<string, number>;
+  pages: Record<string, { revision: number; end: number }>;
+  imageReads: number;
 };
 
 export const emptyCompanionAgentSession = (): CompanionAgentSession => ({
-  calls: 0, consecutiveErrors: 0, lastErrorTool: "", noteRemaining: 12000, metadataRemaining: 12000, cursor: null, inspected: {},
+  calls: 0, consecutiveErrors: 0, lastErrorTool: "", noteRemaining: 64000, metadataRemaining: 24000, cursor: null, inspected: {}, pages: {}, imageReads: 0,
 });
 
 export const parseCompanionAgentSession = (value: unknown): CompanionAgentSession => {
@@ -78,17 +81,26 @@ export const parseCompanionAgentSession = (value: unknown): CompanionAgentSessio
       .filter((entry): entry is [string, number] => typeof entry[1] === "number"))
     : {};
   return {
+    pages: record.pages && typeof record.pages === "object" && !Array.isArray(record.pages)
+      ? Object.fromEntries(Object.entries(record.pages as Record<string, unknown>).filter((entry): entry is [string, { revision: number; end: number }] => {
+        const page = entry[1] as { revision?: number; end?: number } | null;
+        return Boolean(page && Number.isSafeInteger(page.revision) && Number.isSafeInteger(page.end) && page.end! >= 0);
+      })) : {},
+    imageReads: typeof record.imageReads === "number" ? record.imageReads : 0,
     calls: typeof record.calls === "number" ? record.calls : 0,
     consecutiveErrors: typeof record.consecutiveErrors === "number" ? record.consecutiveErrors : 0,
     lastErrorTool: typeof record.lastErrorTool === "string" ? record.lastErrorTool : "",
-    noteRemaining: typeof record.noteRemaining === "number" ? record.noteRemaining : 12000,
-    metadataRemaining: typeof record.metadataRemaining === "number" ? record.metadataRemaining : 12000,
+    noteRemaining: typeof record.noteRemaining === "number" ? record.noteRemaining : 64000,
+    metadataRemaining: typeof record.metadataRemaining === "number" ? record.metadataRemaining : 24000,
     cursor: typeof record.cursor === "number" ? record.cursor : null,
     inspected,
   };
 };
 
 const TOOL_HINTS: Record<string, string> = {
+  get_memo: " Returns a page of Markdown. Follow nextOffset using offset until nextOffset=null before changing or claiming to have read the whole note. Never infer missing pages.",
+  read_memo_attachment: " First list_memo_resources for real resource IDs. Content mode reads images as vision input and extracts Word DOCX/UTF-8 text. Follow nextOffset to read all text. Unsupported formats, oversized files and model vision errors must be reported accurately; never guess their contents. Cite the source note and returned attachment URL.",
+  select_note_template: " Select by content purpose, independently of the destination notebook. Prefer the user's explicit template; use AI 对话通用模板 as fallback for general AI conversations. Fill only relevant sections; never invent facts to fill a template.",
   find_notebooks: " Use this whenever the user names a notebook. Notebook names are not IDs.",
   delete_notebook: " Delete an empty notebook using its exact ID from find_notebooks or resolve_notebook_path. This is separate from emptying the trash. Never trash or move its notes to make it empty unless the user explicitly requests that. If lookup is ambiguous, ask which notebook; do not guess.",
   list_notebooks: " Use this to list every notebook name. Do not guess names from the open note.",
@@ -165,7 +177,7 @@ const ASK_USER_QUESTION_SCHEMA = {
 } as Record<string, unknown>;
 
 const companionMcpCatalog = (input: CompanionTurnInput) => COMPANION_MCP_TOOLS.filter(definition =>
-  input.allowWrites !== false || definition.annotations.readOnlyHint);
+  (input.allowWrites !== false && !companionAdviceOnly(input.message)) || definition.annotations.readOnlyHint);
 
 const companionMcpDescription = (definition: (typeof COMPANION_MCP_TOOLS)[number]) => {
   const readOnly = definition.annotations.readOnlyHint;
@@ -214,6 +226,19 @@ export function companionToolDefinitions(input: CompanionTurnInput): CompanionTo
           ...described,
           description: `${described.description} This request is a share or 占比. Use template chart-pie-donut-plain-text with numeric data.values. Do not imitate it with a mind map.`,
         };
+      }
+      if (definition.name === "get_memo") {
+        described = { ...described, inputSchema: { ...inputSchema, properties: {
+          ...(inputSchema.properties as Record<string, unknown>),
+          offset: { type: "integer", minimum: 0, description: "Start at zero, then use the returned nextOffset." },
+          limit: { type: "integer", minimum: 1, maximum: 12000, description: "Markdown characters per page; default 12000." },
+        } } };
+      }
+      if (definition.name === "read_memo_attachment") {
+        const properties = inputSchema.properties as Record<string, unknown>;
+        described = { ...described, inputSchema: { ...inputSchema, properties: { ...properties,
+          mode: { type: "string", enum: ["content"], description: "Extract readable text or image content. Original binary documents are not model input." },
+        } } };
       }
       return described;
     }),
@@ -273,14 +298,23 @@ export function createCompanionTools(args: { db: DatabaseAdapter; scope: Compani
       execute: async (input: Record<string, unknown>) => {
         args.signal.throwIfAborted();
         await args.assertActive();
-        if (++session.calls > 16) throw new Error("Tool call limit reached.");
+        if (++session.calls > 32) throw new Error("Tool call limit reached.");
         const call: CompanionToolCall = { id: crypto.randomUUID(), name: definition.name, status: "running", effects: [] };
         args.run?.tools.push(call);
         persistSession();
         await args.run?.onProgress?.();
         try {
         const { _reason, ...parameters } = input;
-        if (INBOX_DEFAULT_NOTEBOOK_TOOLS.has(definition.name)) {
+        const pageOffset = definition.name === "get_memo" ? (parameters.offset ?? 0) : 0;
+        const pageLimit = definition.name === "get_memo" ? (parameters.limit ?? 12000) : 12000;
+        if (definition.name === "get_memo") {
+          delete parameters.offset; delete parameters.limit;
+          if (!Number.isSafeInteger(pageOffset) || Number(pageOffset) < 0 || !Number.isSafeInteger(pageLimit) || Number(pageLimit) < 1 || Number(pageLimit) > 12000)
+            throw new AppError("invalid_params", "Invalid note page offset or limit.", 400);
+        }
+        if (definition.name === "read_memo_attachment" && parameters.mode === "original")
+          throw new AppError("attachment_format_unsupported", "Use content mode. Original binary files cannot be read as text or vision content.", 400);
+        if (INBOX_DEFAULT_NOTEBOOK_TOOLS.has(definition.name) && definition.inputSchema.required?.includes("notebookId")) {
           const notebookId = parameters.notebookId;
           if (typeof notebookId !== "string" || !notebookId.trim()) {
             parameters.notebookId = await resolveWorkspaceInboxId(args.db, args.scope.workspaceId);
@@ -452,6 +486,22 @@ export function createCompanionTools(args: { db: DatabaseAdapter; scope: Compani
           return done({ applied: true, ...(typeof result === "object" && result ? result as object : { result }) });
         }
         if (current !== await companionWorkspaceCursor(args.db, args.scope.workspaceId)) return done({ error: "Notes changed during this read. Start a fresh request." });
+        if (definition.name === "read_memo_attachment") {
+          const attachment = result as Awaited<ReturnType<typeof import("../mcp/mcp-attachment").readMcpAttachment>>;
+          const source = await getMemoDetail(args.db, args.scope.workspaceId, attachment.attachment.memoId);
+          if (source) remember(source);
+          if (attachment.contentBlock.type === "text") {
+            const offset = Number(parameters_.offset ?? 0);
+            const text = takeNoteText(attachment.contentBlock.text, 12000);
+            if (!text.length && attachment.contentBlock.text.length)
+              throw new AppError("companion_read_budget", "The per-turn reading budget is exhausted. Continue in a new request; this attachment is not fully read.", 400);
+            if (text.length < attachment.contentBlock.text.length) attachment.nextOffset = offset + text.length;
+            attachment.contentBlock = { type: "text", text };
+          } else if (++session.imageReads > 4) {
+            throw new AppError("companion_image_budget", "Read at most four images per request. Continue in a new request.", 400);
+          }
+          return done({ ...attachment, url: `/api/v1/resources/${encodeURIComponent(attachment.attachment.id)}/blob` });
+        }
         if (definition.name === "get_diagram" || definition.name === "get_poster") {
           const payload = result as { memo: { id: string; title: string | null; revision: number; notebookId?: string }; diagram: { kind?: string; nodes?: unknown[] } };
           inspected.set(payload.memo.id, payload.memo.revision);
@@ -481,11 +531,20 @@ export function createCompanionTools(args: { db: DatabaseAdapter; scope: Compani
             return done({ id: memo.id, title: memo.title, notebookId: memo.notebookId, tags: memo.tags, revision: memo.revision,
               poster: true, message: "This is an editable poster. Read its canvas with get_poster and edit with update_poster; do not decode or replace Markdown." });
           }
-          const content = takeNoteText(memo.contentMarkdown, 8000);
-          if (content.length === memo.contentMarkdown.length) inspected.set(memo.id, memo.revision); else inspected.delete(memo.id);
+          const page = session.pages[memo.id];
+          const readEnd = page?.revision === memo.revision ? page.end : 0;
+          if (Number(pageOffset) > readEnd || Number(pageOffset) > memo.contentMarkdown.length)
+            throw new AppError("companion_unread_page", `Read the next page at offset ${readEnd}; do not skip source content.`, 400);
+          const content = takeNoteText(memo.contentMarkdown.slice(Number(pageOffset)), Number(pageLimit));
+          if (!content.length && memo.contentMarkdown.length > Number(pageOffset))
+            throw new AppError("companion_read_budget", "The per-turn reading budget is exhausted. This note is not fully read; do not replace it.", 400);
+          const end = Number(pageOffset) + content.length;
+          session.pages[memo.id] = { revision: memo.revision, end: Math.max(readEnd, end) };
+          const complete = session.pages[memo.id].end === memo.contentMarkdown.length;
+          if (complete) inspected.set(memo.id, memo.revision); else inspected.delete(memo.id);
           return done({ id: memo.id, title: memo.title, notebookId: memo.notebookId, tags: memo.tags, revision: memo.revision,
             createdAt: memo.createdAt, updatedAt: memo.updatedAt,
-            content, truncated: content.length !== memo.contentMarkdown.length,
+            content, offset: pageOffset, nextOffset: end < memo.contentMarkdown.length ? end : null, totalCharacters: memo.contentMarkdown.length, truncated: !complete,
             ...(payload.infographic ? {
               infographic: payload.infographic,
               message: "This is an infographic note. Do not replace it with update_memo or turn it into a diagram.",

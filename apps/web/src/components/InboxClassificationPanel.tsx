@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { FolderCheck, LoaderCircle, RotateCcw, WandSparkles } from "lucide-react";
+import { FolderCheck, LoaderCircle, WandSparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 
-type Action = "queue" | "apply" | "undo";
+type Action = "queue" | "apply";
 
 export function InboxClassificationPanel({ inbox, memoId, workspaceKey, onChanged }: {
   inbox: boolean;
@@ -24,7 +24,7 @@ export function InboxClassificationPanel({ inbox, memoId, workspaceKey, onChange
   const status = useQuery({
     queryKey: ["inbox-classification", workspaceKey, memoId],
     queryFn: ({ signal }) => api.getInboxClassification(memoId!, signal),
-    enabled: enabled && Boolean(memoId),
+    enabled: enabled && inbox && Boolean(memoId),
     refetchInterval: (query) => query.state.data?.inInbox ? 3_000 : false,
     retry: false,
   });
@@ -42,7 +42,11 @@ export function InboxClassificationPanel({ inbox, memoId, workspaceKey, onChange
     mutationFn: (command: Action) => api.runInboxClassificationAction(memoId!, command),
     onSettled: () => { void status.refetch(); },
   });
-  if (!enabled || (!inbox && !data?.inInbox && !moved)) return null;
+  if (capability.isError && inbox) return <section className="mt-3 rounded-md border p-3 text-xs" role="alert">
+    <p>{t("inboxClassification.statusFailed")}</p>
+    <Button type="button" variant="outline" size="sm" onClick={() => void capability.refetch()}>{t("inboxClassification.reload")}</Button>
+  </section>;
+  if (!enabled || !inbox || (data && !data.inInbox)) return null;
 
   const summary = active
     ? t(data.status === "pending" ? "inboxClassification.pending" : "inboxClassification.running")
@@ -71,14 +75,14 @@ export function InboxClassificationPanel({ inbox, memoId, workspaceKey, onChange
           {action.isError && <p role="alert" className="leading-5 text-rose-600">{t("inboxClassification.actionFailed")}</p>}
         </div>
       </div>
-      {data && !active && (data.inInbox || data.canUndo) && (
+      {status.isError && <Button type="button" variant="outline" size="sm" onClick={() => void status.refetch()}>{t("inboxClassification.reload")}</Button>}
+      {data && !active && data.inInbox && (
         <div className="mt-1.5 flex flex-wrap gap-1.5 pl-6">
           {data.canApply && <Button type="button" variant="soft" size="sm" disabled={action.isPending}
             onClick={() => action.mutate("apply")}>{t("inboxClassification.apply")}</Button>}
           {data.inInbox && <Button type="button" variant={data.canApply ? "ghost" : "soft"} size="sm" disabled={action.isPending}
             onClick={() => action.mutate("queue")}>{t(data.status ? "inboxClassification.retry" : "inboxClassification.start")}</Button>}
-          {data.canUndo && <Button type="button" variant="soft" size="sm" disabled={action.isPending}
-            onClick={() => action.mutate("undo")}><RotateCcw className="h-3.5 w-3.5" aria-hidden />{t("inboxClassification.undo")}</Button>}
+
         </div>
       )}
     </section>

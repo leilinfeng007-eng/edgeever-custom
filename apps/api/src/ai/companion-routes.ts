@@ -21,6 +21,7 @@ import { parseJsonArray, parseJsonObject } from "./companion-tool-receipts";
 import { prepareCompanionTurn, type CompanionRunState } from "./companion-prepare";
 import { assertCompanionAttachmentsSupported, bindCompanionTurnAttachments, storeCompanionAttachment } from "./companion-attachments";
 import { executeCompanionTurnTool, parseCompanionAgentSession } from "./companion-agent-tools";
+import { saveCompanionResponse, SaveCompanionResponseSchema } from "./companion-save-response";
 import { applyCompanionAction, dismissCompanionAction, listCompanionActions } from "./companion-actions";
 import { acknowledgeDiscovery, rememberDiscoveryFeedback, completeDiscoveryGeneration, discoveryPreparePayload, getDiscoverySettings, listDiscoveries, saveDiscoverySettings, startDiscoveryCheck } from "./companion-discovery";
 
@@ -148,6 +149,10 @@ export const registerCompanionRoutes = (parent: Hono<AppEnv>, dependencies: {
     if (!CompanionIdSchema.safeParse(c.req.param("id")).success) return notFound(c, "Suggestion not found.");
     return c.json({ action: await dismissCompanionAction(c.env.storage.db, scopeFor(c), c.req.param("id")) });
   });
+  app.post("/api/v1/companion/turns/:id/save-note", zValidator("json", SaveCompanionResponseSchema), async c => {
+    if (!CompanionIdSchema.safeParse(c.req.param("id")).success) return notFound(c, "Conversation not found.");
+    return c.json(await saveCompanionResponse(c, scopeFor(c), c.req.param("id"), c.req.valid("json")));
+  });
   app.post("/api/v1/companion/memories", zValidator("json", CompanionMemoryInputSchema), async c => {
     return c.json({ memory: await saveCompanionMemory(c.env.storage.db, scopeFor(c), c.req.valid("json")) }, 201);
   });
@@ -221,19 +226,23 @@ export const registerCompanionRoutes = (parent: Hono<AppEnv>, dependencies: {
     const input = turnInputFromRow(row);
     const response = body.response ?? row.response;
     const process = body.process ?? row.process_text ?? "";
-    const result = await executeCompanionTurnTool({
-      db, scope, context: c, input, signal: c.req.raw.signal,
-      assertActive: async () => {
-        const current = await getCompanionTurn(db, scope, row.id);
-        if (!current || current.status !== "running" || await companionRevision(db, scope) !== row.memory_revision) {
-          throw new AppError("companion_context_changed", "Context changed.", 409);
-        }
-      },
-      sources, run, session, name: body.name, toolInput: body.input,
-    });
-    await checkpointCompanionTurn(db, scope, row, response, sources, "running", undefined, {
-      tools: run.tools, todos: run.todos, questions: run.questions, process, session,
-    });
+    let result: unknown;
+    try {
+      result = await executeCompanionTurnTool({
+        db, scope, context: c, input, signal: c.req.raw.signal,
+        assertActive: async () => {
+          const current = await getCompanionTurn(db, scope, row.id);
+          if (!current || current.status !== "running" || await companionRevision(db, scope) !== row.memory_revision) {
+            throw new AppError("companion_context_changed", "Context changed.", 409);
+          }
+        },
+        sources, run, session, name: body.name, toolInput: body.input,
+      });
+    } finally {
+      await checkpointCompanionTurn(db, scope, row, response, sources, "running", undefined, {
+        tools: run.tools, todos: run.todos, questions: run.questions, process, session,
+      });
+    }
     return c.json({ result, tools: run.tools, todos: run.todos, questions: run.questions, pause: run.pause.ask });
   });
   app.post("/api/v1/companion/turns/:id/checkpoint", zValidator("json", CompanionTurnCheckpointSchema), async c => {

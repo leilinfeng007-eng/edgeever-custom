@@ -45,7 +45,7 @@ import { audit, auditStatement } from "../common/audit";
 import type { AppContext, AuditActor, AuthContext, Bindings } from "../api-context";
 import { AppError } from "../common/app-error";
 import { readMcpAttachment } from "./mcp-attachment";
-import { canClassifyInbox, enqueueInboxClassification, hasInboxHold, rescheduleInboxClassification, stopMemoClassification } from "../ai/inbox-classification";
+import { canClassifyInbox, enqueueInboxClassification, notebookClassificationChoice, hasInboxHold, rescheduleInboxClassification, stopMemoClassification } from "../ai/inbox-classification";
 import { isDemoModeEnabled } from "../workspace/demo-mode";
 import { createId, isoNow } from "../common/entity-utils";
 import { sha256 } from "../common/hash-utils";
@@ -180,6 +180,7 @@ export type McpToolDependencies = {
     notebookId: string,
     actor: AuditActor,
     actorLabel: string,
+    commit?: import("../notes/memo-service").MemoMutationCommit,
   ) => Promise<number>;
   restoreMemosRecord: (
     database: DatabaseAdapter,
@@ -326,7 +327,7 @@ export const callMcpTool = async (
       const memo = await getMemoDetail(c.env.storage.db, auth.workspaceId, memoId, args.includeDeleted === true);
 
       if (!memo) {
-        throw new Error("Memo not found");
+        throw new AppError("not_found", "Memo not found", 404);
       }
 
       const diagram = parseDiagramDocument(memo.contentMarkdown);
@@ -491,7 +492,7 @@ export const callMcpTool = async (
       }
       // An exact prose retry can reuse the existing note. Candidate merges with
       // changed content or files are decided by the caller after reading the note.
-      if (auth.kind === "agent" && !destination && !bind && args.allowDuplicate !== true && title && contentMarkdown.trim()) {
+      if (!destination && !bind && args.allowDuplicate !== true && title && contentMarkdown.trim()) {
         const hash = await sha256(contentMarkdown + JSON.stringify(markdownToDoc(contentMarkdown)));
         const matches = await db.prepare(`
           SELECT m.id FROM memo_contents c JOIN memos m ON m.id = c.memo_id
@@ -520,7 +521,7 @@ export const callMcpTool = async (
         ...(bind?.(memoId) ?? []),
         ...(destination || args.autoClassify === false
           ? stopMemoClassification(c.env, auth, memoId)
-          : enqueueInboxClassification(c.env, auth, notebookId, memoId)),
+          : enqueueInboxClassification(c.env, auth, notebookId, memoId, true)),
         ...(templateId ? [auditStatement(db, actor.actorType, actor.actorId, "template.use", "template", templateId, { memoId })] : []),
       ]));
       return {
@@ -774,7 +775,7 @@ export const callMcpTool = async (
       const actorLabel = getActorLabel(c);
       const resourceIds = parseResourceIds(args.resourceIds) ?? [];
       const bind = await preparePendingResourceBinding(db, auth, resourceIds, actor);
-      if (args.requireResourcePlacement === true || (auth.kind === "agent" && markdown !== undefined && markdown !== existing.contentMarkdown)) {
+      if (args.requireResourcePlacement === true || (markdown !== undefined && markdown !== existing.contentMarkdown)) {
         await validateMcpResourcePlacement(
           db, workspaceId, markdown ?? existing.contentMarkdown,
           args.requireResourcePlacement === true ? resourceIds : [],
@@ -788,11 +789,11 @@ export const callMcpTool = async (
       const changed = Boolean(bind) || (title !== undefined && title !== existing.title) ||
         (markdown !== undefined && markdown !== existing.contentMarkdown);
       const toInbox = !explicitLocation && changed && !existingKind && !existing.isArchived &&
-        auth.kind === "agent" && canClassifyInbox(c.env, workspaceId) &&
+        canClassifyInbox(c.env, workspaceId) &&
         (args.autoClassify === true || !(await hasInboxHold(db, workspaceId, memoId)));
       const notebookId = toInbox ? await resolveWorkspaceInboxId(db, workspaceId) : destination ?? undefined;
       const classificationEffects = toInbox && notebookId
-        ? enqueueInboxClassification(c.env, auth, notebookId, memoId)
+        ? enqueueInboxClassification(c.env, auth, notebookId, memoId, true)
         : explicitLocation ? stopMemoClassification(c.env, auth, memoId) : [];
       const expectedRevision = typeof args.expectedRevision === "number" && Number.isInteger(args.expectedRevision)
         ? args.expectedRevision : auth.kind === "agent" ? existing.revision : undefined;
@@ -898,7 +899,9 @@ export const callMcpTool = async (
 
       const actor = getAuditActor(c);
       const actorLabel = getActorLabel(c);
-      const moved = await moveMemosToNotebook(c.env.storage.db, auth.workspaceId, memoIds, notebookId, actor, actorLabel);
+      const moved = await moveMemosToNotebook(c.env.storage.db, auth.workspaceId, memoIds, notebookId, actor, actorLabel, {
+        before: [], after: () => notebookClassificationChoice(c.env, auth, memoIds, notebookId, false),
+      });
 
       return { ok: true, moved };
     }

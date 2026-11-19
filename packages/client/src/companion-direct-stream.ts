@@ -1,3 +1,5 @@
+import { companionAttachmentModelOutput } from "@edgeever/shared";
+import { companionModelAttachmentMessages } from "./companion-model-messages";
 import type {
   CompanionEvent,
   CompanionModelContentPart,
@@ -192,6 +194,9 @@ export const streamDirectCompanion = async (
       tool({
         description: definition.description,
         inputSchema: jsonSchema(definition.inputSchema),
+        ...(definition.name === "read_memo_attachment" ? {
+          toModelOutput: ({ output }: { output: unknown }) => companionAttachmentModelOutput(output),
+        } : {}),
         execute: async (input: unknown) => {
           sealProcess();
           const pending: CompanionToolCall = {
@@ -224,6 +229,7 @@ export const streamDirectCompanion = async (
         fetch: options.fetch,
       }),
       instructions: prepared.instructions,
+      prepareStep: ({ messages }: { messages: ModelMessage[] }) => ({ messages: companionModelAttachmentMessages(messages) }),
       tools: agentTools,
       stopWhen: [isStepCount(prepared.maxSteps), () => pause.ask],
       maxOutputTokens: prepared.maxOutputTokens,
@@ -282,8 +288,11 @@ export const streamDirectCompanion = async (
       throw new Error("No text returned.");
     }
     const usage = usageFrom(await result.totalUsage);
+    const finishReason = await result.finishReason;
     // Only a question asked in this run pauses it; older instances still return answered questions on resume.
-    await finish(pause.ask ? "interrupted" : "completed", usage);
+    // A step budget ending on a tool call has no final answer yet. Keep the
+    // receipts and offer Continue instead of reporting the task as completed.
+    await finish(pause.ask || finishReason === "tool-calls" ? "interrupted" : "completed", usage);
   } catch (error) {
     if (options.signal?.aborted) {
       await finish("interrupted");

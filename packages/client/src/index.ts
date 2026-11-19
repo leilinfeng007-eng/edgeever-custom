@@ -1191,6 +1191,8 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
     forgetCompanionMemory: (memory: CompanionMemory) => request<{ ok: true }>(`/api/v1/companion/memories/${encodeURIComponent(memory.id)}?version=${memory.version}`, { method: "DELETE" }),
     listCompanionTurns: () => request<{ turns: CompanionTurn[] }>("/api/v1/companion/turns"),
     getCompanionTurn: (id: string) => request<{ turn: CompanionTurn }>(`/api/v1/companion/turns/${encodeURIComponent(id)}`),
+    saveCompanionResponse: (id: string, input: { action: "create" | "append"; memoId?: string; expectedRevision?: number }) =>
+      request<{ memo: MemoDetail; reused: boolean }>(`/api/v1/companion/turns/${encodeURIComponent(id)}/save-note`, { method: "POST", body: JSON.stringify(input) }),
     cancelCompanionTurn: (id: string) => request<{ ok: true }>(`/api/v1/companion/turns/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }),
     resumeCompanionTurn: async (id: string, payload: CompanionTurnResume = {}, options: { signal?: AbortSignal; onEvent: (event: CompanionEvent) => void }) => {
       await runCompanionDirect(`/api/v1/companion/turns/${encodeURIComponent(id)}/resume/prepare`, payload, options);

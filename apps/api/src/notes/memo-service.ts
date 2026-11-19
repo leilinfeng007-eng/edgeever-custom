@@ -766,7 +766,8 @@ export const moveMemosToNotebook = async (
   memoIds: string[],
   notebookId: string,
   actor: { actorType: "user" | "agent"; actorId: string | null },
-  actorLabel: string
+  actorLabel: string,
+  commit?: MemoMutationCommit,
 ) => {
   const uniqueMemoIds = Array.from(new Set(memoIds));
 
@@ -790,6 +791,7 @@ export const moveMemosToNotebook = async (
 
   const now = isoNow();
   const statements: PreparedStatementAdapter[] = [
+    ...(commit?.before ?? []),
     db
       .prepare(
         `UPDATE memos
@@ -810,6 +812,7 @@ export const moveMemosToNotebook = async (
     );
   }
 
+  statements.push(...(commit?.after("") ?? []));
   await db.batch(statements);
   return uniqueMemoIds.length;
 };
@@ -821,11 +824,12 @@ export const moveMemosRecord = async (
   notebookId: string,
   actor: AuditActor,
   actorLabel: string,
+  commit?: MemoMutationCommit,
 ) => {
   if (!(await notebookExists(db, workspaceId, notebookId))) {
     throw new AppError("not_found", "Target notebook not found", 404);
   }
-  return moveMemosToNotebook(db, workspaceId, memoIds, notebookId, actor, actorLabel);
+  return moveMemosToNotebook(db, workspaceId, memoIds, notebookId, actor, actorLabel, commit);
 };
 
 export const mergeMemosRecord = async (

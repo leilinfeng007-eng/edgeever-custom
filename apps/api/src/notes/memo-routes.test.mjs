@@ -309,7 +309,7 @@ describe("memo route contracts", () => {
 
     expect(response.status).toBe(428);
     expect(received[2]).toBe("memo_1");
-    expect(received.at(-1)).toBe(true);
+    expect(received[6]).toBe(true);
     expect(await response.json()).toMatchObject({ error: { code: "edit_session_required" } });
   });
 

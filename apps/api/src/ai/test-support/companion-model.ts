@@ -1,3 +1,5 @@
+import { companionAttachmentModelOutput } from "@edgeever/shared";
+import { companionModelAttachmentMessages } from "../../../../../packages/client/src/companion-model-messages";
 // Mock-model harness for database/tool tests; never imported by production routes.
 import { isStepCount, jsonSchema, tool, streamText, type LanguageModel, type ModelMessage } from "ai";
 import type {
@@ -71,6 +73,9 @@ export const streamCompanion = async (args: {
           if (!selected) throw new Error(`Missing companion tool: ${definition.name}`);
           return selected.execute(input);
         },
+        ...(definition.name === "read_memo_attachment" ? {
+          toModelOutput: ({ output }: { output: unknown }) => companionAttachmentModelOutput(output),
+        } : {}),
         ...(definition.name === "get_poster_preview" || definition.name === "export_poster" ? {
           toModelOutput: ({ output }: { output: unknown }) => {
             const visual = posterToolImage(definition.name, output);
@@ -88,6 +93,7 @@ export const streamCompanion = async (args: {
   const generation = {
     model: args.model,
     instructions: companionAgentInstructions(args.input, args.memories, receipts, args.history, args.revision),
+    prepareStep: ({ messages }: { messages: ModelMessage[] }) => ({ messages: companionModelAttachmentMessages(messages) }),
     tools,
     stopWhen: [isStepCount(COMPANION_MAX_STEPS), () => run.pause.ask],
     maxOutputTokens: COMPANION_MAX_OUTPUT_TOKENS,

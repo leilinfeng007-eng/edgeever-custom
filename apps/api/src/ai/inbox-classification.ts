@@ -45,8 +45,9 @@ export const enqueueInboxClassification = (
   auth: AuthContext,
   notebookId: string,
   memoId: string,
+  manualChoice = false,
 ): PreparedStatementAdapter[] => {
-  if (auth.kind !== "agent" || !canClassifyInbox(env, auth.workspaceId)) return [];
+  if ((auth.kind !== "agent" && !manualChoice) || !canClassifyInbox(env, auth.workspaceId)) return [];
   return [env.storage.db.prepare(`
     INSERT INTO inbox_classification_jobs (memo_id, workspace_id, inbox_id, available_at)
     SELECT m.id, m.workspace_id, n.id, ?
@@ -59,8 +60,22 @@ export const enqueueInboxClassification = (
   `).bind(Date.now() + SETTLE_MS, memoId, auth.workspaceId, notebookId)];
 };
 
+// Runs in the same transaction as the standard notebook selector/batch move.
+// Clearing the lease prevents an in-flight model result from undoing a choice.
+export const notebookClassificationChoice = (env: Bindings, auth: AuthContext, memoIds: string[], notebookId: string, queueInbox = auth.kind === "user") => {
+  if (!canClassifyInbox(env, auth.workspaceId)) return [];
+  return [...new Set(memoIds)].flatMap(memoId => [
+    env.storage.db.prepare(`UPDATE inbox_classification_jobs
+      SET status = 'retained', outcome = 'explicit_location', claim_token = NULL,
+          destination_id = NULL, reason = NULL, result_revision = NULL, suggested_tags = NULL
+      WHERE workspace_id = ? AND memo_id = ?`).bind(auth.workspaceId, memoId),
+    ...(queueInbox
+      ? enqueueInboxClassification(env, auth, notebookId, memoId, true)
+      : stopMemoClassification(env, auth, memoId)),
+  ]);
+};
+
 export const stopMemoClassification = (env: Bindings, auth: AuthContext, memoId: string) => {
-  if (auth.kind !== "agent") return [];
   const db = env.storage.db;
   const recordedHold = db.prepare(`
     INSERT INTO inbox_classification_jobs (memo_id, workspace_id, inbox_id, status, outcome)
@@ -90,7 +105,7 @@ export async function hasInboxHold(db: DatabaseAdapter, workspaceId: string, mem
 }
 
 export const rescheduleInboxClassification = (env: Bindings, auth: AuthContext, memoId: string) => {
-  if (auth.kind !== "agent" || !canClassifyInbox(env, auth.workspaceId)) return [];
+  if (!canClassifyInbox(env, auth.workspaceId)) return [];
   return [env.storage.db.prepare(`
     UPDATE inbox_classification_jobs
     SET status = 'pending', available_at = ?, attempts = 0, claim_token = NULL, outcome = NULL,

@@ -2,7 +2,66 @@ import { enUS as sharedCatalog } from "@edgeever/shared/i18n/en-US";
 
 export const enUS = {
   ...sharedCatalog,
+  assistantWorkspace: {
+    "contextNote": "Referenced: {{name}}",
+    "removeNoteContext": "Remove note context",
+    "adviceOnly": "Advice only",
+    "saveNew": "Save as new note",
+    "append": "Append to current note",
+    "replaceSelection": "Replace selection",
+    "selectionChanged": "The selection changed. Select it again before replacing.",
+    "saved": "Saved: {{name}}",
+    "progress": "Tool history ({{count}})",
+    "failedSteps": "{{count}} steps failed",
+    "executing": "Running",
+    "openNote": "Open note",
+    "states": {
+        "running": "Running",
+        "done": "Completed",
+        "error": "Failed"
+    },
+    "tasks": {
+        "pending": "Pending",
+        "in_progress": "In progress",
+        "completed": "Completed"
+    },
+    "shortcuts": {
+        "readFiles": "Read attachments",
+        "extractTodos": "Extract tasks",
+        "compareNotes": "Compare notes"
+    },
+    "prompts": {
+        "readFiles": "Read and summarize the current note attachments. Actually read images and all Word pages, cite the source note and attachment, and do not edit notes.",
+        "extractTodos": "Extract tasks, owners and deadlines from the current note. Mark unspecified facts as unspecified. Do not edit notes.",
+        "compareNotes": "Search for notes related to the current note and compare their content, differences and conflicts. Cite notes. Advice only; do not edit notes."
+    },
+    "tools": {
+        "get_memo": "Read note",
+        "search_memos": "Search notes",
+        "list_memos": "List notes",
+        "list_notebooks": "List notebooks",
+        "find_notebooks": "Find notebook",
+        "list_memo_resources": "List attachments",
+        "read_memo_attachment": "Read attachment content",
+        "select_note_template": "Select template",
+        "get_note_template": "Read template",
+        "list_note_templates": "List templates",
+        "create_memo": "Create note",
+        "update_memo": "Update note",
+        "move_memos": "Move notes",
+        "trash_memos": "Move to trash",
+        "restore_memos": "Restore notes",
+        "merge_memos": "Merge notes",
+        "todo_write": "Update tasks"
+    }
+},
   inboxClassification: {
+    manualLocation: "In a specified notebook, with no current automatic classification result.",
+    details: "Classification details",
+    reload: "Reload status",
+    noRecord: "No automatic classification record. This note may have been moved manually or saved to a specified notebook.",
+    standardMove: "Use the notebook selector or standard Move action to change location. Moving to the inbox queues a new analysis.",
+
     title: "Automatic filing", selectNote: "Select a note to check filing status", loading: "Checking filing status", statusFailed: "Unable to check filing status",
     idle: "Filing has not started", pending: "Queued for filing", running: "Finding a notebook", moved: "Filed in {{name}}",
     suggested: "Suggested notebook: {{name}}", retained: "Kept in the inbox", apply: "Apply suggestion", start: "File this note",

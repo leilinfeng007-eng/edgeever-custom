@@ -184,7 +184,7 @@ test("direct companion executes a tool when the browser lacks randomUUID", async
   const pending = events.find(event => event.type === "tools")?.tools[0];
   expect(pending).toMatchObject({ name, status: "running" });
   expect(pending.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  expect(completed).toEqual([expect.objectContaining({ status: "completed" })]);
+  expect(completed).toEqual([expect.objectContaining({ status: "interrupted" })]);
 });
 
 test("direct provider rejection includes safe diagnostics and completes the failed turn once", async () => {
@@ -293,4 +293,32 @@ test("process text sealed before tool calls stays within the instance limit (#65
   expect(clipped.length).toBeLessThanOrEqual(COMPANION_PROCESS_MAX_CHARS);
   expect(clipped.endsWith("r".repeat(9000))).toBe(true);
   expect(clipCompanionProcess("short")).toBe("short");
+});
+
+test("image attachment tools reach the compatible provider as pixels, not base64 text", async()=>{
+  const {streamDirectCompanion}=await import("./companion-direct-stream.ts");
+  const requests=[], completed=[];
+  const png="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
+  const name="read_memo_attachment";
+  const stream=chunks=>new Response(chunks.map(chunk=>`data: ${JSON.stringify(chunk)}\n\n`).join("")+"data: [DONE]\n\n",{headers:{"content-type":"text/event-stream"}});
+  await streamDirectCompanion({...preparedTurn,maxSteps:3,tools:[{name,description:"Read attached image",inputSchema:{type:"object",properties:{memoId:{type:"string"},resourceId:{type:"string"}},required:["memoId","resourceId"]}}]}, {
+    fetch:async(_url,init)=>{
+      requests.push(JSON.parse(init.body));
+      return requests.length===1?stream([
+        {choices:[{delta:{tool_calls:[{index:0,id:"image-call",type:"function",function:{name,arguments:'{"memoId":"memo_image","resourceId":"res_image"}'}}]},finish_reason:null}]},
+        {choices:[{delta:{},finish_reason:"tool_calls"}]},
+      ]):stream([{choices:[{delta:{content:"Read the pixels"}}]},{choices:[{delta:{},finish_reason:"stop"}]}]);
+    },
+    executeTool:async()=>({result:{attachment:{id:"res_image",memoId:"memo_image",filename:"pixel.png"},url:"/api/v1/resources/res_image/blob",format:"image",contentBlock:{type:"image",mimeType:"image/png",data:png}},tools:[{id:"read",name,status:"done",effects:[]}],todos:[],questions:[]}),
+    onEvent:()=>{},checkpoint:async()=>{},complete:async body=>{completed.push(body);return {turn:{...preparedTurn.turn,...body}};},
+  });
+  expect(requests).toHaveLength(2);
+  const messages=requests[1].messages;
+  const toolMessage=messages.find(m=>m.role==="tool");
+  expect(toolMessage.content).toContain("/api/v1/resources/res_image/blob");
+  expect(toolMessage.content).not.toContain(png);
+  const imageParts=messages.filter(m=>m.role==="user"&&Array.isArray(m.content)).flatMap(m=>m.content).filter(p=>p.type==="image_url");
+  expect(imageParts).toHaveLength(1);
+  expect(imageParts[0].image_url.url).toBe(`data:image/png;base64,${png}`);
+  expect(completed).toHaveLength(1);expect(completed[0].status).toBe("completed");
 });

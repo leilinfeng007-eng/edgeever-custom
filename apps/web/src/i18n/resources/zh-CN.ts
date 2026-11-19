@@ -2,7 +2,66 @@ import { zhCN as sharedCatalog } from "@edgeever/shared/i18n/zh-CN";
 
 export const zhCN = {
   ...sharedCatalog,
+  assistantWorkspace: {
+    "contextNote": "已引用：{{name}}",
+    "removeNoteContext": "移除正文引用",
+    "adviceOnly": "仅建议",
+    "saveNew": "保存为新笔记",
+    "append": "追加到当前笔记",
+    "replaceSelection": "替换选中文字",
+    "selectionChanged": "选区已变化，请重新选择后操作。",
+    "saved": "已保存：{{name}}",
+    "progress": "工具记录（{{count}}）",
+    "failedSteps": "{{count}} 步失败",
+    "executing": "正在执行",
+    "openNote": "查看笔记",
+    "states": {
+        "running": "执行中",
+        "done": "已完成",
+        "error": "失败"
+    },
+    "tasks": {
+        "pending": "待处理",
+        "in_progress": "进行中",
+        "completed": "已完成"
+    },
+    "shortcuts": {
+        "readFiles": "读取附件",
+        "extractTodos": "提取待办",
+        "compareNotes": "对比笔记"
+    },
+    "prompts": {
+        "readFiles": "读取当前笔记的附件并总结，图片需实际读取，Word 正文要读完；附上笔记和附件来源，不修改笔记。",
+        "extractTodos": "从当前笔记中提取待办、负责人和期限，没有明确的信息标注未说明，不修改笔记。",
+        "compareNotes": "先查找与当前笔记相关的笔记，比较已知内容、差异和冲突，给出来源链接，先给建议，不修改笔记。"
+    },
+    "tools": {
+        "get_memo": "读取笔记",
+        "search_memos": "搜索笔记",
+        "list_memos": "列出笔记",
+        "list_notebooks": "查看笔记本",
+        "find_notebooks": "查找笔记本",
+        "list_memo_resources": "列出附件",
+        "read_memo_attachment": "读取附件内容",
+        "select_note_template": "选择模板",
+        "get_note_template": "读取模板",
+        "list_note_templates": "列出模板",
+        "create_memo": "新建笔记",
+        "update_memo": "修改笔记",
+        "move_memos": "移动笔记",
+        "trash_memos": "移入回收站",
+        "restore_memos": "恢复笔记",
+        "merge_memos": "合并笔记",
+        "todo_write": "更新任务进度"
+    }
+},
   inboxClassification: {
+    manualLocation: "已在指定笔记本中，没有可用的自动分类结果。",
+    details: "自动分类详情",
+    reload: "重新读取",
+    noRecord: "此笔记没有自动分类记录，可能由手动移动或指定笔记本保存。",
+    standardMove: "调整归属请使用笔记本选择器或列表的标准移动功能。移入等待分类后会重新分析。",
+
     title: "自动分类", selectNote: "选择一篇笔记查看分类状态", loading: "正在查询状态", statusFailed: "暂时无法读取分类状态",
     idle: "尚未提交分类", pending: "已排队，等待分类", running: "正在判断笔记归属", moved: "已归入「{{name}}」",
     suggested: "建议归入「{{name}}」，等待确认", retained: "保留在等待分类", apply: "采用建议", start: "开始分类",
