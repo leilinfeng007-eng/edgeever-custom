@@ -4552,11 +4552,7 @@ const RichEditorPane = ({
                     contentClassName="z-[110] max-w-xs whitespace-normal"
                     label={t("editor.copyToWeChatTooltip")}
                   >
-                    <DropdownMenuItem onSelect={() => setClassificationDetailsOpen(true)}>
-                    <Sparkles className="h-4 w-4 text-slate-500" />
-                    {t("inboxClassification.details")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
+                    <DropdownMenuItem
                       className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
                       disabled={!editor || useMobilePlainTextEditor || wechatCopyState === "copying"}
                       onClick={() => void handleCopyToWeChat()}
@@ -4577,6 +4573,13 @@ const RichEditorPane = ({
               )}
               moreMenuItems={(
                 <>
+                <DropdownMenuItem
+                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
+                  onSelect={() => setClassificationDetailsOpen(true)}
+                >
+                  <Sparkles className="h-4 w-4 text-slate-500" />
+                  {t("inboxClassification.details")}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
                   disabled={isLocalMemoId(memo.id)}
