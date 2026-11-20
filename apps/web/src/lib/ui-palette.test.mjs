@@ -15,18 +15,16 @@ describe("application color system", () => {
     expect(contrastRatio("#11694a", "#f0f8f4")).toBeGreaterThanOrEqual(4.5);
   });
 
-  test("keeps menus, switches, solid buttons, and secondary icons in ink", () => {
+  test("keeps menus and switches neutral while solid buttons use the brand green", () => {
     const button = readFileSync(new URL("../components/ui/button.tsx", import.meta.url), "utf8");
     const switchSource = readFileSync(new URL("../components/ui/switch.tsx", import.meta.url), "utf8");
     const checkbox = readFileSync(new URL("../components/ui/checkbox.tsx", import.meta.url), "utf8");
-    const settings = readFileSync(new URL("../components/SettingsPane.tsx", import.meta.url), "utf8");
 
-    expect(button).toContain('solid: "bg-primary/85 text-primary-foreground hover:bg-primary/95 border-primary/85"');
+    expect(button).toContain('solid: "bg-emerald-600 text-white border border-emerald-600');
     expect(button).not.toContain("bg-emerald-500");
 
     expect(globals).toContain("--accent: 210 16% 89%;");
     expect(globals).toContain("--accent-foreground: 0 0% 7%;");
-    expect(globals).not.toContain("--accent-foreground: 158 70% 25%;");
     expect(globals).toContain("--switch-track-on: #525252;");
     expect(globals).toContain("--checkbox-on: #525252;");
     expect(globals).toContain("--switch-track-on: #e8e8e8;");
@@ -34,20 +32,19 @@ describe("application color system", () => {
     expect(switchSource).not.toContain("bg-emerald-500");
     expect(checkbox).toContain("data-[state=checked]:bg-[var(--checkbox-on)]");
     expect(checkbox).not.toContain("bg-emerald-500");
-    expect(settings).not.toContain("text-emerald-");
     expect(contrastRatio("#ffffff", "#525252")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio("#ffffff", "#1a1d21")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio("#121315", "#e8e8e8")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#ffffff", "#047857")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#0c1310", "#e8e8e8")).toBeGreaterThanOrEqual(4.5);
   });
 
-  test("keeps the light workspace on a cool gray palette while preserving text hierarchy", () => {
-    expect(globals).toContain("--workspace-canvas: #eef1f4;");
-    expect(globals).toContain("--workspace-sidebar: #e7ebef;");
-    expect(globals).toContain("--workspace-memo-list: #f4f6f8;");
-    expect(globals).toContain("--workspace-editor: #f8fafb;");
-    expect(globals).toContain("--workspace-selection: #dde3e9;");
+  test("keeps the light workspace on a soft green palette while preserving text hierarchy", () => {
+    expect(globals).toContain("--workspace-canvas: #dfe9e3;");
+    expect(globals).toContain("--workspace-sidebar: #e8f1eb;");
+    expect(globals).toContain("--workspace-memo-list: #f3f8f5;");
+    expect(globals).toContain("--workspace-editor: #ffffff;");
+    expect(globals).toContain("--workspace-selection: #d5eadf;");
     expect(globals).toContain("--color-workspace-canvas: var(--workspace-canvas);");
-    expect(globals).toContain("--workspace-hover: color-mix(in srgb, var(--workspace-sidebar) 40%, white);");
+    expect(globals).toContain("--workspace-hover: #edf5f0;");
     expect(globals).toContain(".edgeever-workspace-sidebar-footer {\n  background: var(--workspace-sidebar);");
     expect(globals).toContain("--slate-500-rgb: 115 115 115;");
     expect(globals).toContain("--slate-950-rgb: 10 10 10;");
@@ -60,21 +57,21 @@ describe("application color system", () => {
     expect(globals).not.toContain("--slate-500-rgb: 100 116 139;");
     expect(contrastRatio("#222222", "#ffffff")).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio("#737373", "#ffffff")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio("#27272a", "#f8fafb")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio("#737373", "#f8fafb")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#27272a", "#ffffff")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#5c6661", "#f3f8f5")).toBeGreaterThanOrEqual(4.5);
   });
 
   test("keeps dark workspace surfaces distinct and neutral", () => {
-    expect(globals).toContain("--workspace-canvas: #121315;");
-    expect(globals).toContain("--workspace-sidebar: #17181a;");
-    expect(globals).toContain("--workspace-memo-list: #1d1e20;");
-    expect(globals).toContain("--workspace-editor: #222325;");
-    expect(globals).toContain("--foreground: 0 0% 87%;");
-    expect(globals).toContain("--border: 0 0% 23%;");
+    expect(globals).toContain("--workspace-canvas: #0c1310;");
+    expect(globals).toContain("--workspace-sidebar: #111a16;");
+    expect(globals).toContain("--workspace-memo-list: #16221c;");
+    expect(globals).toContain("--workspace-editor: #1b2721;");
+    expect(globals).toContain("--foreground: 150 10% 90%;");
+    expect(globals).toContain("--border: 158 12% 24%;");
     expect(globals).toContain("--amber-300-rgb: 180 83 9;");
     expect(globals).not.toContain("scrollbar-color: rgba(100, 116, 139, 0.18)");
-    expect(contrastRatio("#dedede", "#222325")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio("#a3a3a3", "#222325")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio("#a0a0a0", "#222325")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#dedede", "#1b2721")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#a3a3a3", "#1b2721")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#a0a0a0", "#1b2721")).toBeGreaterThanOrEqual(4.5);
   });
 });

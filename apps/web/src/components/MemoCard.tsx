@@ -85,7 +85,12 @@ export const MemoCard = ({
   const longPressPointRef = useRef<{ x: number; y: number } | null>(null);
   const [modifierHoverActive, setModifierHoverActive] = useState(false);
   const memoTitle = memo.title?.trim() && !isDefaultMemoTitle(memo.title) ? memo.title.trim() : t("common.untitledMemo");
-  const memoExcerpt = memo.excerpt.trim() || t("memoCard.emptyMemo");
+  const attachmentLabel = t("editor.attachmentLabel", { filename: "" }).trim();
+  const memoExcerpt = (memo.excerpt.trim() || t("memoCard.emptyMemo"))
+    .replace(/\bAttachment:\s*/g, attachmentLabel ? `${attachmentLabel} ` : "")
+    // A localized attachment heading already names the section; do not repeat the label.
+    .replace(/(^|\s)附件\s+(?=附件[：:])/g, "$1")
+    .trim();
   const diagramLabel = memo.diagramKind
     ? t(`diagram.${memo.diagramKind === "mind-map" ? "mindMap" : memo.diagramKind}`)
     : null;
@@ -330,7 +335,7 @@ export const MemoCard = ({
   const compact = listDensity === "compact";
   const listTime = (
     <time
-      className={cn("text-xs font-normal text-slate-500", compact && "shrink-0 tabular-nums")}
+      className={cn("text-[11.5px] font-normal tabular-nums text-slate-400 dark:text-slate-500", compact && "shrink-0")}
       dateTime={listTimestamp.value}
     >
       {listTimestamp.field === "createdAt"
@@ -387,17 +392,17 @@ export const MemoCard = ({
       draggable={!isTrashView}
       onDragStart={handleDragStart}
       className={cn(
-        "edgeever-memo-divider group relative overflow-hidden border border-slate-100 bg-card transition lg:my-0.5 lg:rounded-lg lg:border lg:border-transparent lg:bg-transparent lg:shadow-none transition-all duration-200 select-none",
+        "edgeever-memo-divider group relative overflow-hidden border border-slate-100 bg-card transition-all duration-200 select-none lg:my-1 lg:rounded-xl lg:border-[var(--workspace-memo-divider)] lg:bg-card lg:shadow-[0_1px_2px_rgba(6,20,14,0.03)] lg:hover:border-emerald-500/25",
         isLast && "lg:border-b-transparent",
-        listDensity === "compact" ? "rounded-md shadow-none" : "rounded-lg shadow-[0_4px_16px_rgba(15,23,42,0.045)] lg:shadow-none",
+        listDensity === "compact" ? "rounded-lg shadow-none" : "rounded-lg shadow-[0_4px_16px_rgba(15,23,42,0.045)] lg:shadow-[0_1px_2px_rgba(6,20,14,0.03)]",
         !selectionMode && selected
-          ? "edgeever-workspace-selection border-[var(--workspace-divider)] bg-workspace-selection lg:border-[var(--workspace-divider)] lg:bg-workspace-selection"
+          ? "edgeever-workspace-selection border-[var(--workspace-divider)] bg-workspace-selection ring-1 ring-inset ring-emerald-600/20 lg:border-emerald-600/20 lg:bg-workspace-selection dark:ring-emerald-400/20"
           : checked
             ? "bg-slate-50 ring-1 ring-slate-200 lg:border-[var(--workspace-divider)] lg:bg-[var(--workspace-selection)] lg:ring-0"
-            : "active:bg-slate-50 lg:hover:bg-workspace-hover"
+            : "active:bg-emerald-50/50 lg:hover:bg-card"
       )}
     >
-      <div className={cn("flex items-center", compact ? "min-h-[52px]" : "min-h-[132px]")} data-memo-density={listDensity}>
+      <div className={cn("flex items-center", compact ? "min-h-[46px]" : "min-h-[96px]")} data-memo-density={listDensity}>
         {showSelectionControl && (
           <Tooltip><TooltipTrigger asChild><button
             className="ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/70 focus-visible:ring-offset-2 lg:ml-3 lg:h-6 lg:w-6"
@@ -424,7 +429,7 @@ export const MemoCard = ({
         )}
         <button
           className={cn(
-            "min-w-0 flex-1 px-4 py-3.5 text-left touch-pan-y focus-visible:bg-slate-50 focus-visible:shadow-[inset_3px_0_0_rgb(148,163,184)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-400/60 [-webkit-touch-callout:none] lg:py-3.5 transition-all duration-200",
+            "min-w-0 flex-1 px-4 py-2.5 text-left touch-pan-y focus-visible:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/35 [-webkit-touch-callout:none] lg:py-2.5 transition-all duration-200",
             compact && "py-2 lg:py-1.5",
             showSelectionControl && "pl-3 lg:pl-3",
             !isTrashView && !multiSelectKeyDown && "lg:cursor-grab lg:active:cursor-grabbing",
@@ -444,7 +449,7 @@ export const MemoCard = ({
           onKeyDown={handleKeyDown}
         >
           {compact ? compactBody : <>
-          <div className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[14px] font-semibold tracking-[-0.012em] leading-snug text-slate-950">
+          <div className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[14px] font-semibold tracking-[-0.01em] leading-snug text-slate-950 ">
             {memo.isPinned && <Star className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500" />}
             <span className="min-w-0 truncate">{memoTitle}</span>
           </div>
@@ -498,16 +503,16 @@ export const MemoCard = ({
               ) : null}
             </div>
           ) : (
-            <div className="line-clamp-2 min-h-10 text-xs leading-relaxed text-slate-500">
+            <div className="line-clamp-2 min-h-[2.2rem] text-[12.5px] leading-[1.5] text-slate-500">
               {memoExcerpt}
             </div>
           )}
-          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {listTime}
             {memo.tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="text-xs tracking-tight text-slate-400"
+                className="rounded-md bg-slate-100/80 px-1.5 py-0.5 text-[11px] leading-4 tracking-tight text-slate-500 dark:bg-white/5 dark:text-slate-400"
               >
                 #{tag}
               </span>

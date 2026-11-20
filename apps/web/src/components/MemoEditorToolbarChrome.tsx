@@ -9,7 +9,7 @@ export const MemoEditorToolbarRow = forwardRef<
   <div
     ref={ref}
     className={cn(
-      "flex min-w-0 max-w-full flex-wrap items-center gap-1",
+      "flex min-w-0 max-w-full flex-wrap items-center gap-0.5 sm:gap-1",
       MEMO_EDITOR_TOOLBAR_PADDING_CLASS_NAME,
       className,
     )}
@@ -20,5 +20,5 @@ export const MemoEditorToolbarRow = forwardRef<
 MemoEditorToolbarRow.displayName = "MemoEditorToolbarRow";
 
 export const MemoEditorToolbarDivider = ({ className }: { className?: string }) => (
-  <span aria-hidden="true" className={cn("h-5 w-px shrink-0 bg-slate-200", className)} />
+  <span aria-hidden="true" className={cn("mx-0.5 h-5 w-px shrink-0 bg-slate-200/80 dark:bg-white/10", className)} />
 );

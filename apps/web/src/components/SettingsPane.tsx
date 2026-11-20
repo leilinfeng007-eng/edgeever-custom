@@ -85,7 +85,7 @@ interface SettingsPaneProps {
 
 // Slate and brand color variables already switch values with the root theme.
 const SettingsGroup = ({ children }: { children: ReactNode }) => (
-  <div className="min-w-0 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-card [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent">
+  <div className="min-w-0 divide-y divide-[var(--workspace-divider)] overflow-hidden rounded-2xl border border-[var(--workspace-divider)] bg-card shadow-[0_1px_2px_rgba(6,20,14,0.03)] [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent">
     {children}
   </div>
 );
@@ -358,7 +358,7 @@ export const SettingsPane = ({
             <ChevronLeft className="h-5 w-5 text-slate-500" />
           </Button>
           <div className="min-w-0">
-            <h1 className={`flex items-center gap-2 ${WORKSPACE_PAGE_TITLE_CLASSNAME}`}>
+            <h1 className={`flex items-center gap-2 ${WORKSPACE_PAGE_TITLE_CLASSNAME} text-[17px]`}>
               <HeaderIcon className="h-4 w-4 shrink-0 text-slate-900" />
               <span className="truncate text-slate-900">{getHeaderTitle()}</span>
             </h1>
@@ -372,9 +372,9 @@ export const SettingsPane = ({
 
       <div className="flex min-h-0 min-w-0 flex-1 bg-workspace-canvas">
         {/* 桌面端布局：双栏 */}
-        <div className="hidden lg:flex flex-1 min-h-0 min-w-0 mx-auto max-w-5xl px-6 py-6 gap-6">
+        <div className="hidden lg:flex flex-1 min-h-0 min-w-0 mx-auto max-w-6xl px-6 py-6 gap-6">
           {/* 左侧垂直 Tab 栏 */}
-          <aside className="w-52 shrink-0 flex flex-col gap-1">
+          <aside className="flex w-52 shrink-0 self-start flex-col gap-1 rounded-2xl border border-[var(--workspace-divider)] bg-card p-2 shadow-[0_1px_2px_rgba(6,20,14,0.03)]">
             {tabItems.map((item) => {
               const Icon = item.icon;
               const isSelected = activeTab === item.key;
@@ -386,12 +386,12 @@ export const SettingsPane = ({
                   className={cn(
                     "flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs leading-5 transition-all duration-150 text-left w-full",
                     isSelected
-                      ? "bg-workspace-selection font-normal text-slate-950"
+                      ? "bg-emerald-50 font-medium text-emerald-900 ring-1 ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-400/20"
                       : "font-normal text-slate-600 hover:bg-workspace-hover hover:text-slate-900"
                   )}
                 >
                   <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-                    <Icon className={cn("h-4 w-4 transition-colors", isSelected ? "text-slate-950" : "text-slate-400")} />
+                    <Icon className={cn("h-4 w-4 transition-colors", isSelected ? "text-emerald-700 dark:text-emerald-300" : "text-slate-400")} />
                     {item.key === "system" && deployedUpdateUnseen ? <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-workspace-canvas" /> : null}
                   </span>
                   <span className="flex-1 truncate">{item.label}</span>

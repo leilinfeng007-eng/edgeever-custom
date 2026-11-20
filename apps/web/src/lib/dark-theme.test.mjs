@@ -44,7 +44,7 @@ describe("dark theme contracts", () => {
     const memoCard = readFileSync(new URL("../components/MemoCard.tsx", import.meta.url), "utf8");
     expect(css).toContain(":root.dark .edgeever-public-share .ProseMirror");
     expect(css).toContain("color: hsl(var(--foreground));");
-    expect(css).toContain("--workspace-memo-divider: #383a3d;");
+    expect(css).toContain("--workspace-memo-divider: #30423a;");
     expect(css).toContain(":root.dark .edgeever-workspace-memo-list .edgeever-memo-divider");
     expect(memoCard).toContain("edgeever-memo-divider");
     expect(memoCard).not.toContain("dark:lg:border-slate-300");
@@ -69,17 +69,17 @@ describe("dark theme contracts", () => {
   test("workspace dark surfaces stay neutral and bundled editor themes blend into the canvas", () => {
     const css = readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8");
 
-    expect(css).toContain("--workspace-canvas: #121315;");
-    expect(css).toContain("--workspace-sidebar: #17181a;");
-    expect(css).toContain("--workspace-memo-list: #1d1e20;");
-    expect(css).toContain("--workspace-editor: #222325;");
-    expect(css).toContain("--workspace-selection: #333638;");
-    expect(css).toContain("--workspace-hover: color-mix(in srgb, var(--workspace-sidebar) 90%, white);");
+    expect(css).toContain("--workspace-canvas: #0c1310;");
+    expect(css).toContain("--workspace-sidebar: #111a16;");
+    expect(css).toContain("--workspace-memo-list: #16221c;");
+    expect(css).toContain("--workspace-editor: #1b2721;");
+    expect(css).toContain("--workspace-selection: #203a2d;");
+    expect(css).toContain("--workspace-hover: #1c2b24;");
     expect(css).toContain("--slate-500-rgb: 161 161 161;");
     expect(css).toContain(':not([data-editor-theme="custom"])');
     expect(css).toContain("--editor-theme-bg: var(--workspace-editor);");
-    expect(contrastRatio("#dedede", "#222325")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio("#a3a3a3", "#222325")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#dedede", "#1b2721")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#a3a3a3", "#1b2721")).toBeGreaterThanOrEqual(4.5);
   });
 
   test("dark chrome uses workspace tokens instead of leftover blue-slate", () => {

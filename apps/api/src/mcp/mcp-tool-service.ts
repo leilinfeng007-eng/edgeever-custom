@@ -45,11 +45,12 @@ import { audit, auditStatement } from "../common/audit";
 import type { AppContext, AuditActor, AuthContext, Bindings } from "../api-context";
 import { AppError } from "../common/app-error";
 import { readMcpAttachment } from "./mcp-attachment";
-import { canClassifyInbox, enqueueInboxClassification, notebookClassificationChoice, hasInboxHold, rescheduleInboxClassification, stopMemoClassification } from "../ai/inbox-classification";
+import { canClassifyInbox, enqueueInboxClassification, getInboxClassificationStatus, notebookClassificationChoice, hasInboxHold, rescheduleInboxClassification, stopMemoClassification } from "../ai/inbox-classification";
 import { isDemoModeEnabled } from "../workspace/demo-mode";
 import { createId, isoNow } from "../common/entity-utils";
 import { sha256 } from "../common/hash-utils";
-import { selectMcpNoteTemplate } from "./mcp-note-template";
+import { resolveMcpNoteTemplate, selectMcpNoteTemplate } from "./mcp-note-template";
+import { applyNoteSectionOperations, cleanTemplateMarkdown, type NoteSectionOperation } from "./mcp-note-sections";
 import { stageMemoResource, validateMcpResourcePlacement } from "./mcp-note-resources";
 import {
   decodeBase64Data,
@@ -255,6 +256,102 @@ const withBindingConflict = async <T>(binding: boolean, run: () => Promise<T>): 
   }
 };
 
+type DuplicateCandidate = { id: string; title: string; revision: number; notebookId: string };
+
+const candidateColumns = `m.id, m.title, c.revision, m.notebook_id AS notebookId`;
+
+const describeCandidates = (candidates: DuplicateCandidate[]) =>
+  candidates.map(candidate => `${candidate.id} ("${candidate.title || "Untitled"}", revision ${candidate.revision})`).join(", ");
+
+const normalizeCandidateTitle = (value: string | null | undefined) =>
+  (value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+
+/** 内容哈希与标题分别检索；标题只用于提示确认，不单独作为合并依据。 */
+async function findDuplicateCandidates(
+  db: DatabaseAdapter,
+  workspaceId: string,
+  title: string,
+  contentHash: string,
+  notebookId?: string,
+) {
+  const scope = notebookId ? "AND m.notebook_id = ?" : "";
+  const exact = await db.prepare(`
+    SELECT ${candidateColumns} FROM memo_contents c JOIN memos m ON m.id = c.memo_id
+    WHERE c.content_hash = ? AND m.workspace_id = ?
+      AND m.is_deleted = 0 AND m.is_archived = 0 ${scope}
+    LIMIT 2
+  `).bind(contentHash, workspaceId, ...(notebookId ? [notebookId] : [])).all<DuplicateCandidate>();
+  const sameTitle = await db.prepare(`
+    SELECT ${candidateColumns} FROM memo_contents c JOIN memos m ON m.id = c.memo_id
+    WHERE m.workspace_id = ? AND m.is_deleted = 0 AND m.is_archived = 0
+      AND lower(trim(m.title)) = lower(trim(?)) ${scope}
+    ORDER BY m.updated_at DESC LIMIT 5
+  `).bind(workspaceId, title, ...(notebookId ? [notebookId] : [])).all<DuplicateCandidate>();
+  return { exact: exact.results, sameTitle: sameTitle.results };
+}
+
+const normalizeSourceName = (value: string) => {
+  const source = value.trim().toLocaleLowerCase("en-US");
+  if (source.length > 80 || !/^[a-z0-9._-]+$/.test(source)) {
+    throw new AppError("invalid_params", "source must contain only letters, numbers, dots, underscores, or hyphens (max 80).", 400);
+  }
+  return source;
+};
+
+const normalizeSourceId = (value: string) => {
+  const id = value.trim();
+  if (!id || id.length > 512) throw new AppError("invalid_params", "sourceId must be 1-512 characters.", 400);
+  return id;
+};
+
+async function findSourceMemo(db: DatabaseAdapter, workspaceId: string, source: string, sourceId: string) {
+  const row = await db.prepare(`
+    SELECT s.memo_id AS memoId FROM memo_import_sources s
+    JOIN memos m ON m.id = s.memo_id AND m.workspace_id = s.workspace_id
+    WHERE s.workspace_id = ? AND s.source = ? AND s.external_id = ?
+      AND m.is_deleted = 0 AND m.is_archived = 0
+  `).bind(workspaceId, source, sourceId).first<{ memoId: string }>();
+  return row?.memoId ?? null;
+}
+
+const memoSourceStatement = (
+  db: DatabaseAdapter,
+  workspaceId: string,
+  source: string,
+  sourceId: string,
+  memoId: string,
+  contentHash: string,
+) => {
+  const now = isoNow();
+  return db.prepare(`
+    INSERT INTO memo_import_sources (
+      workspace_id, source, external_id, memo_id, source_updated_at, content_hash, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
+    ON CONFLICT (workspace_id, source, external_id) DO UPDATE SET
+      memo_id = excluded.memo_id, content_hash = excluded.content_hash, updated_at = excluded.updated_at
+  `).bind(workspaceId, source, sourceId, memoId, contentHash, now, now);
+};
+
+const parseSectionOperations = (value: unknown): NoteSectionOperation[] | undefined => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 20) {
+    throw new AppError("invalid_params", "sectionOperations must contain 1-20 operations.", 400);
+  }
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new AppError("invalid_params", `sectionOperations[${index}] must be an object.`, 400);
+    }
+    const record = item as Record<string, unknown>;
+    const heading = typeof record.heading === "string" ? record.heading.trim() : "";
+    const mode = record.mode;
+    const contentMarkdown = record.contentMarkdown;
+    if (!heading || (mode !== "append" && mode !== "replace") || typeof contentMarkdown !== "string") {
+      throw new AppError("invalid_params", `sectionOperations[${index}] needs heading, mode, and contentMarkdown.`, 400);
+    }
+    return { heading, mode, contentMarkdown };
+  });
+};
+
 export const callMcpTool = async (
   c: AppContext,
   auth: AuthContext,
@@ -282,6 +379,13 @@ export const callMcpTool = async (
   switch (name) {
     case "get_current_user": {
       return await getCurrentWorkspaceIdentity(c.env.storage.db, auth);
+    }
+    case "get_inbox_classification": {
+      assertScope(auth, "read:memos");
+      const memoId = getRequiredString(args.memoId, "memoId");
+      const status = await getInboxClassificationStatus(c.env.storage.db, auth.workspaceId, memoId);
+      if (!status) throw new AppError("not_found", "Memo not found", 404);
+      return { enabled: canClassifyInbox(c.env, auth.workspaceId), ...status };
     }
     // 输入为筛选条件，返回 { memos } 摘要，最多 50 条；正文细节应另调 get_memo，不把片段当完整正文。
     case "search_memos": {
@@ -477,36 +581,144 @@ export const callMcpTool = async (
       const notebookId = destination ?? await resolveWorkspaceInboxId(db, workspaceId);
       const actor = getAuditActor(c);
       const actorLabel = getActorLabel(c);
-      const templateId = getOptionalString(args.templateId);
-      const template = templateId ? await getMemoTemplate(db, workspaceId, templateId) : null;
-      if (templateId && !template) throw new AppError("not_found", "Template not found", 404);
-      const contentMarkdown = typeof args.contentMarkdown === "string" ? args.contentMarkdown : "";
-      if (template && !contentMarkdown.trim()) {
+      const requestedTemplateId = getOptionalString(args.templateId);
+      const requestedPurpose = getOptionalString(args.purpose);
+      const rawMarkdown = typeof args.contentMarkdown === "string" ? args.contentMarkdown : "";
+      const rawTitle = getOptionalString(args.title);
+      // 结构化笔记由专用工具维护，不能按散文模板清洗或改写。
+      const structuredInput = Boolean(parseDiagramDocument(rawMarkdown) || hasTableDocumentMarker(rawMarkdown)
+        || hasPosterDocumentMarker(rawMarkdown) || hasInfographicDocumentMarker(rawMarkdown));
+      // 用户模板优先；未指定时按用途推断，无法确定时使用通用模板。
+      // 推断结果只用于选择模板，内容仍以调用方提交的完整正文为准。
+      const selection = !structuredInput && (requestedTemplateId || requestedPurpose || rawMarkdown.trim())
+        ? await resolveMcpNoteTemplate(db, workspaceId, {
+            templateId: requestedTemplateId ?? undefined,
+            purpose: requestedPurpose ?? undefined,
+            title: rawTitle ?? undefined,
+            contentMarkdown: rawMarkdown,
+          })
+        : {
+            template: null,
+            selection: "verbatim" as const,
+            purpose: "verbatim" as const,
+            inferredPurpose: "general" as const,
+            inferred: false,
+          };
+      const template = selection.template;
+      const contentMarkdown = structuredInput || selection.selection === "verbatim"
+        ? rawMarkdown
+        : cleanTemplateMarkdown(rawMarkdown);
+      if (template && !rawMarkdown.trim()) {
         throw new AppError("invalid_params", "Provide completed contentMarkdown, or use use_note_template for an unfilled draft.", 400);
       }
-      const title = getOptionalString(args.title) ?? template?.title ?? undefined;
+      const title = rawTitle ?? template?.title ?? undefined;
+      const requestedTags = getOptionalStringArray(args.tags);
+      const tags = [...requestedTags, ...(template?.tags ?? [])];
       const resourceIds = parseResourceIds(args.resourceIds) ?? [];
       const bind = await preparePendingResourceBinding(db, auth, resourceIds, actor);
+      const rawSource = getOptionalString(args.source);
+      const rawSourceId = getOptionalString(args.sourceId);
+      const source = rawSourceId ? normalizeSourceName(rawSource ?? "mcp") : undefined;
+      const sourceId = rawSourceId ? normalizeSourceId(rawSourceId) : undefined;
+      const contentHash = await sha256(contentMarkdown + JSON.stringify(markdownToDoc(contentMarkdown)));
+
+      const sourceMemoId = source && sourceId ? await findSourceMemo(db, workspaceId, source, sourceId) : null;
+      const sourceMemo = sourceMemoId ? await getMemoDetail(db, workspaceId, sourceMemoId) : null;
+      if (sourceMemo) {
+        if (parseDiagramDocument(sourceMemo.contentMarkdown) || hasTableDocumentMarker(sourceMemo.contentMarkdown)
+          || hasPosterDocumentMarker(sourceMemo.contentMarkdown) || hasInfographicDocumentMarker(sourceMemo.contentMarkdown)) {
+          throw new AppError("duplicate_match_requires_update", "This source already maps to a structured note. Update it with its dedicated tool instead of create_memo.", 409);
+        }
+        const changed = sourceMemo.contentMarkdown !== contentMarkdown
+          || (title !== undefined && title !== sourceMemo.title)
+          || (requestedTags.length > 0 && JSON.stringify(requestedTags) !== JSON.stringify(sourceMemo.tags.filter(tag => requestedTags.includes(tag))));
+        if (!changed && !bind) return { memo: sourceMemo, reused: true };
+        if (resourceIds.length || changed) {
+          await validateMcpResourcePlacement(
+            db, workspaceId, contentMarkdown, resourceIds,
+            { id: sourceMemo.id, contentMarkdown: sourceMemo.contentMarkdown, allowRemoval: false },
+          );
+        }
+        const explicitLocation = Boolean(destination) || args.autoClassify === false;
+        const toInbox = !explicitLocation && changed && !sourceMemo.isArchived
+          && canClassifyInbox(c.env, workspaceId)
+          && !(await hasInboxHold(db, workspaceId, sourceMemo.id));
+        const targetNotebook = toInbox ? await resolveWorkspaceInboxId(db, workspaceId) : destination;
+        const classificationEffects = toInbox
+          ? enqueueInboxClassification(c.env, auth, targetNotebook!, sourceMemo.id, true)
+          : explicitLocation ? stopMemoClassification(c.env, auth, sourceMemo.id) : [];
+        const result = await withBindingConflict(Boolean(bind), () => updateMemoRecord(
+          db,
+          workspaceId,
+          sourceMemo.id,
+          {
+            expectedRevision: sourceMemo.revision,
+            notebookId: targetNotebook ?? undefined,
+            title: title ?? sourceMemo.title ?? undefined,
+            contentMarkdown,
+            tags: requestedTags.length ? tags : undefined,
+            createdAt: getOptionalString(args.createdAt) ?? undefined,
+            updatedAt: getOptionalString(args.updatedAt) ?? undefined,
+          },
+          actor,
+          actorLabel,
+          false,
+          {
+            before: [],
+            after: (id) => [
+              ...(bind?.(id) ?? []),
+              ...classificationEffects,
+              ...(source && sourceId ? [memoSourceStatement(db, workspaceId, source, sourceId, sourceMemo.id, contentHash)] : []),
+            ],
+          },
+        ));
+        if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409);
+        return { memo: result.memo, reused: true, updated: true };
+      }
+
       if (resourceIds.length && (args.requireResourcePlacement === true || !destination)) {
         await validateMcpResourcePlacement(db, workspaceId, contentMarkdown, resourceIds);
       }
-      // An exact prose retry can reuse the existing note. Candidate merges with
-      // changed content or files are decided by the caller after reading the note.
-      if (!destination && !bind && args.allowDuplicate !== true && title && contentMarkdown.trim()) {
-        const hash = await sha256(contentMarkdown + JSON.stringify(markdownToDoc(contentMarkdown)));
-        const matches = await db.prepare(`
-          SELECT m.id FROM memo_contents c JOIN memos m ON m.id = c.memo_id
-          WHERE c.content_hash = ? AND m.title = ? AND m.workspace_id = ?
-            AND m.is_deleted = 0 AND m.is_archived = 0
-            AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.memo_id = m.id AND r.is_deleted = 0)
-          LIMIT 2
-        `).bind(hash, title, workspaceId).all<{ id: string }>();
-        if (matches.results.length > 1) {
-          throw new AppError("duplicate_match_ambiguous", "Multiple exact matches exist. Read them before choosing a note to update.", 409);
+      // 写入前检索内容哈希与标题候选：完全一致时复用，标题命中但内容不同时要求确认，
+      // 不自动合并，也不仅凭标题创建副本。
+      if (!bind && args.allowDuplicate !== true && title && contentMarkdown.trim()) {
+        const { exact, sameTitle } = await findDuplicateCandidates(
+          db, workspaceId, title, contentHash, destination ?? undefined,
+        );
+        const exactTitleMatches = exact.filter(candidate =>
+          normalizeCandidateTitle(candidate.title) === normalizeCandidateTitle(title));
+        if (exactTitleMatches.length > 1) {
+          throw new AppError(
+            "duplicate_match_ambiguous",
+            `Multiple notes have identical content and title: ${describeCandidates(exactTitleMatches)}. Read them before choosing a note to update.`,
+            409,
+          );
         }
-        if (matches.results[0]) {
-          const memo = await getMemoDetail(db, workspaceId, matches.results[0].id);
+        if (exactTitleMatches[0]) {
+          const memo = await getMemoDetail(db, workspaceId, exactTitleMatches[0].id);
           if (memo) return { memo, reused: true };
+        }
+        if (exact.length) {
+          throw new AppError(
+            "duplicate_match_found",
+            `The same content already exists under a different title: ${describeCandidates(exact)}. Read it and update its title, or pass allowDuplicate=true to create a separate note.`,
+            409,
+          );
+        }
+        const titleMatches = sameTitle;
+        if (titleMatches.length > 1) {
+          throw new AppError(
+            "duplicate_match_ambiguous",
+            `Multiple notes match the title "${title}": ${describeCandidates(titleMatches)}. Read them before choosing a note to update, or pass allowDuplicate=true.`,
+            409,
+          );
+        }
+        if (titleMatches[0]) {
+          throw new AppError(
+            "duplicate_match_found",
+            `A note titled "${title}" already exists: ${describeCandidates(titleMatches)}. Read it and update it, or pass allowDuplicate=true to create a separate copy.`,
+            409,
+          );
         }
       }
 
@@ -514,7 +726,7 @@ export const callMcpTool = async (
         notebookId,
         title,
         contentMarkdown,
-        tags: [...getOptionalStringArray(args.tags), ...(template?.tags ?? [])],
+        tags,
         createdAt: getOptionalString(args.createdAt) ?? undefined,
         updatedAt: getOptionalString(args.updatedAt) ?? undefined,
       }, actor, actorLabel, memoId => [
@@ -522,11 +734,15 @@ export const callMcpTool = async (
         ...(destination || args.autoClassify === false
           ? stopMemoClassification(c.env, auth, memoId)
           : enqueueInboxClassification(c.env, auth, notebookId, memoId, true)),
-        ...(templateId ? [auditStatement(db, actor.actorType, actor.actorId, "template.use", "template", templateId, { memoId })] : []),
+        ...(requestedTemplateId ? [auditStatement(db, actor.actorType, actor.actorId, "template.use", "template", requestedTemplateId, { memoId })] : []),
+        ...(source && sourceId ? [memoSourceStatement(db, workspaceId, source, sourceId, memoId, contentHash)] : []),
       ]));
       return {
         memo,
-        ...(templateId ? { appliedTemplateId: templateId } : {}),
+        ...(requestedTemplateId ? { appliedTemplateId: requestedTemplateId } : {}),
+        ...(template ? { appliedTemplate: { id: template.id, name: template.name } } : {}),
+        templateSelection: selection.selection,
+        inferredPurpose: selection.inferredPurpose,
         ...(resourceIds.length ? { resources: await listResourcesForMemo(db, workspaceId, memo.id) } : {}),
       };
     }
@@ -760,6 +976,13 @@ export const callMcpTool = async (
       const existing = await getMemoDetail(db, workspaceId, memoId);
       if (!existing) throw new AppError("not_found", "Memo not found", 404);
       const markdown = typeof args.contentMarkdown === "string" ? args.contentMarkdown : undefined;
+      const sectionOperations = parseSectionOperations(args.sectionOperations);
+      if (markdown !== undefined && sectionOperations) {
+        throw new AppError("invalid_params", "Use either contentMarkdown or sectionOperations, not both.", 400);
+      }
+      const nextMarkdown = sectionOperations
+        ? applyNoteSectionOperations(existing.contentMarkdown, sectionOperations)
+        : markdown;
       const structured = [
         [() => parseDiagramDocument(existing.contentMarkdown), "diagram_update_required", "Use update_diagram for diagram content."],
         [() => hasTableDocumentMarker(existing.contentMarkdown), "table_update_required", "Use the table tools for structured tables."],
@@ -767,7 +990,7 @@ export const callMcpTool = async (
         [() => hasInfographicDocumentMarker(existing.contentMarkdown), "infographic_update_required", "Use the infographic tools."],
       ] as const;
       const existingKind = structured.find(([matches]) => matches());
-      if (markdown !== undefined && existingKind) {
+      if (nextMarkdown !== undefined && existingKind) {
         throw new AppError(existingKind[1], existingKind[2], 400);
       }
 
@@ -775,11 +998,16 @@ export const callMcpTool = async (
       const actorLabel = getActorLabel(c);
       const resourceIds = parseResourceIds(args.resourceIds) ?? [];
       const bind = await preparePendingResourceBinding(db, auth, resourceIds, actor);
-      if (args.requireResourcePlacement === true || (markdown !== undefined && markdown !== existing.contentMarkdown)) {
+      if (args.requireResourcePlacement === true || (nextMarkdown !== undefined && nextMarkdown !== existing.contentMarkdown)) {
         await validateMcpResourcePlacement(
-          db, workspaceId, markdown ?? existing.contentMarkdown,
+          db, workspaceId, nextMarkdown ?? existing.contentMarkdown,
           args.requireResourcePlacement === true ? resourceIds : [],
-          markdown === undefined ? undefined : { id: memoId, contentMarkdown: existing.contentMarkdown, allowRemoval: args.allowAttachmentReferenceRemoval === true },
+          nextMarkdown === undefined ? undefined : {
+            id: memoId,
+            contentMarkdown: existing.contentMarkdown,
+            allowRemoval: args.allowAttachmentReferenceRemoval === true,
+            allowDuplicateReferences: args.allowDuplicateAttachmentReferences === true,
+          },
         );
       }
 
@@ -787,7 +1015,7 @@ export const callMcpTool = async (
       const title = getOptionalString(args.title) ?? undefined;
       const explicitLocation = Boolean(destination) || args.autoClassify === false;
       const changed = Boolean(bind) || (title !== undefined && title !== existing.title) ||
-        (markdown !== undefined && markdown !== existing.contentMarkdown);
+        (nextMarkdown !== undefined && nextMarkdown !== existing.contentMarkdown);
       const toInbox = !explicitLocation && changed && !existingKind && !existing.isArchived &&
         canClassifyInbox(c.env, workspaceId) &&
         (args.autoClassify === true || !(await hasInboxHold(db, workspaceId, memoId)));
@@ -816,7 +1044,7 @@ export const callMcpTool = async (
           notebookId,
           title,
           isPinned: typeof args.isPinned === "boolean" ? args.isPinned : undefined,
-          contentMarkdown: markdown,
+          contentMarkdown: nextMarkdown,
           tags: Array.isArray(args.tags) ? getOptionalStringArray(args.tags) : undefined,
           createdAt: getOptionalString(args.createdAt) ?? undefined,
           updatedAt: getOptionalString(args.updatedAt) ?? undefined,
@@ -824,7 +1052,7 @@ export const callMcpTool = async (
         actor,
         actorLabel,
         false,
-        bind || classificationEffects.length ? { before: [], after: (id) => [...(bind?.(id) ?? []), ...classificationEffects] } : undefined,
+        bind || classificationEffects.length || before.length ? { before, after: (id) => [...(bind?.(id) ?? []), ...classificationEffects] } : undefined,
       ));
 
       if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409);

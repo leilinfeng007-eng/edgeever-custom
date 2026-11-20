@@ -37,14 +37,16 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
     ? node.attrs.filename
     : getAttachmentFilenameFromLabel(label);
   const mimeType = typeof node.attrs.mimeType === "string" ? node.attrs.mimeType : "";
+  // Keep the stored label untouched, but never show the system "Attachment:" prefix.
+  const displayName = filename || label;
   const resolvedUrl = isDesktopResourceRuntime() ? url : toApiResourceUrl(url);
-  const downloadUrl = toDesktopResourceDownloadUrl(resolvedUrl, filename || label);
+  const downloadUrl = toDesktopResourceDownloadUrl(resolvedUrl, displayName);
   const byteSize = useAttachmentByteSize(resolvedUrl, node.attrs.byteSize);
-  const metadata = formatAttachmentMetadata(mimeType, filename || label, byteSize);
-  const attachmentKind = resolveAttachmentKind(mimeType, filename || label);
+  const metadata = formatAttachmentMetadata(mimeType, displayName, byteSize);
+  const attachmentKind = resolveAttachmentKind(mimeType, displayName);
   const isAudio = attachmentKind === "audio";
   const isVideo = attachmentKind === "video";
-  const isDocx = isPreviewableDocx(filename || label, resolvedUrl);
+  const isDocx = isPreviewableDocx(displayName, resolvedUrl);
   const docxPreviewAllowed = isDocx && (byteSize === null || byteSize <= MAX_INLINE_DOCX_BYTES);
   const videoExpanded = isVideo && resolveFileDisplayMode(node.attrs.displayMode) === "inline";
   const expandable = isVideo || docxPreviewAllowed;
@@ -56,10 +58,12 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
 
   const identity = (
     <>
-      <AttachmentFileIcon mimeType={mimeType} filename={filename || label} className="h-5 w-5 shrink-0" />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-white/5">
+        <AttachmentFileIcon mimeType={mimeType} filename={displayName} className="h-4 w-4" />
+      </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-sm font-semibold text-slate-800">{label}</span>
-        <span className="truncate text-xs font-medium text-slate-500">
+        <span className="truncate text-[13px] font-semibold text-slate-900 ">{displayName}</span>
+        <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
           {isDocx && !docxPreviewAllowed ? `${metadata} · ${t("wordViewer.previewTooLarge")}` : metadata}
         </span>
       </span>
@@ -70,12 +74,12 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
     <NodeViewWrapper
       as="span"
       className="edgeever-file-attachment-node"
-      data-file-name={filename || label}
+      data-file-name={displayName}
       data-file-url={url}
       contentEditable={false}
     >
-      <span ref={setViewerElement} className={cn("edgeever-file-viewer flex min-h-12 flex-col overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm", COMPACT_ATTACHMENT_WIDTH_CLASS)}>
-        <span data-edgeever-resource-toolbar className="flex min-h-12 items-center gap-2 px-3">
+      <span ref={setViewerElement} className={cn("edgeever-file-viewer flex min-h-[52px] flex-col overflow-hidden rounded-lg border border-slate-200/90 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300 dark:border-white/10 dark:hover:border-white/20", COMPACT_ATTACHMENT_WIDTH_CLASS)}>
+        <span data-edgeever-resource-toolbar className="flex min-h-[52px] items-center gap-2.5 px-3 py-2">
           {expandable ? (
             <button
               type="button"
@@ -88,19 +92,19 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
           ) : (
             <AttachmentExternalLink
               href={resolvedUrl}
-              filename={filename || label}
+              filename={displayName}
               className="flex min-w-0 flex-1 items-center gap-2 text-left no-underline"
             >
               {identity}
             </AttachmentExternalLink>
           )}
           <ButtonTooltip title={t("editor.resourceActions.download")}>
-            <a className="pdf-viewer-action" href={downloadUrl} download={filename || label} aria-label={t("editor.resourceActions.download")}>
+            <a className="pdf-viewer-action rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10" href={downloadUrl} download={displayName} aria-label={t("editor.resourceActions.download")}>
               <Download aria-hidden="true" />
             </a>
           </ButtonTooltip>
           <ButtonTooltip title={t(isDesktopResourceRuntime() ? "attachmentOpen.copyHint" : "pdfViewer.openExternal")}>
-            <AttachmentExternalLink className="pdf-viewer-action" href={resolvedUrl} filename={filename || label} iconOnly aria-label={t("pdfViewer.openExternal")}>
+            <AttachmentExternalLink className="pdf-viewer-action rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10" href={resolvedUrl} filename={displayName} iconOnly aria-label={t("pdfViewer.openExternal")}>
               <ExternalLink aria-hidden="true" />
             </AttachmentExternalLink>
           </ButtonTooltip>
@@ -123,7 +127,7 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
             <AudioAttachmentPlayer
               key={resolvedUrl}
               src={resolvedUrl}
-              label={t("audioPlayer.label", { filename: filename || label })}
+              label={t("audioPlayer.label", { filename: displayName })}
               unavailableMessage={t("audioPlayer.unavailable")}
             />
           </span>
@@ -133,14 +137,14 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
             <VideoAttachmentPlayer
               key={resolvedUrl}
               src={resolvedUrl}
-              label={t("videoPlayer.label", { filename: filename || label })}
+              label={t("videoPlayer.label", { filename: displayName })}
               unavailableMessage={t("videoPlayer.unavailable")}
             />
           </span>
         ) : null}
         {docxPreviewAllowed && docxExpanded && resolvedUrl ? (
           <span className="border-t border-slate-200">
-            <DocxAttachmentPreview url={resolvedUrl} filename={filename || label} />
+            <DocxAttachmentPreview url={resolvedUrl} filename={displayName} />
           </span>
         ) : null}
       </span>

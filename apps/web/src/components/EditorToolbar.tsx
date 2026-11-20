@@ -75,10 +75,10 @@ const EditorToolbarButton = ({
     <TooltipTrigger asChild>
       <button
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition disabled:pointer-events-none disabled:opacity-40",
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 disabled:pointer-events-none disabled:opacity-40 dark:text-slate-400",
           active
-            ? "bg-slate-200/80 text-slate-900"
-            : "bg-transparent hover:bg-slate-100 hover:text-slate-800"
+            ? "bg-emerald-50 text-emerald-800"
+            : "bg-transparent hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-white/10"
         )}
         type="button"
         aria-label={title}

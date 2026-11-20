@@ -43,6 +43,7 @@ import {
 import { NotebookTreeItem } from "./NotebookTreeItem";
 import { api, getConfiguredDesktopApiBaseUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getAppAssetPath } from "@/lib/app-page-path";
 import { useShowDescendantNotesPreference } from "@/lib/descendant-notes-preference";
 import { BETA_BADGE_CLASSNAME } from "@/lib/workspace-ui";
 import type { Notebook, AuthUser, NoteCreateKind } from "@edgeever/shared";
@@ -92,8 +93,8 @@ const SidebarNavButton = ({
       tone === "warning"
         ? "text-amber-700 hover:bg-amber-50/70 hover:text-amber-800"
         : active
-          ? "edgeever-workspace-selection text-slate-950 font-medium"
-          : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+          ? "edgeever-workspace-selection text-emerald-900 font-medium"
+          : "text-slate-700 hover:bg-white/70 hover:text-emerald-900"
     )}
     type="button"
     aria-current={active ? "page" : undefined}
@@ -121,7 +122,7 @@ const SidebarShortcutButton = ({
     <button
       className={cn(
         "flex h-9 min-w-0 w-full items-center justify-center rounded-md px-0 text-xs font-medium transition-colors duration-200",
-        active ? "edgeever-workspace-selection text-slate-950" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+        active ? "edgeever-workspace-selection text-emerald-900" : "text-slate-600 hover:bg-white/70 hover:text-emerald-800"
       )}
       type="button"
       aria-current={active ? "page" : undefined}
@@ -693,6 +694,10 @@ export const NotebookPane = ({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-notebook-sidebar-collapsed={collapsed ? "true" : "false"}>
       <div className={cn("flex min-h-0 flex-1 flex-col", collapsed && "hidden")}>
+      <div className="hidden h-14 shrink-0 items-center gap-2.5 border-b border-[var(--workspace-divider)] px-4 lg:flex">
+        <img src={getAppAssetPath("favicon.svg", import.meta.env.BASE_URL)} alt="" className="h-7 w-7 rounded-lg shadow-[0_2px_8px_rgba(6,95,70,0.18)]" />
+        <span className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">EdgeEver</span>
+      </div>
       <header className="flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-end justify-between border-b border-slate-200 px-4 pb-3 pt-[env(safe-area-inset-top)] lg:hidden">
         <div>
           <div className="text-base font-semibold tracking-normal">{t("notebookPane.notebooks")}</div>
@@ -737,23 +742,23 @@ export const NotebookPane = ({
       )}
 
       <div className="hidden shrink-0 px-3 pb-2 pt-2 lg:block">
-        <div className="edgeever-create-memo-split flex overflow-hidden rounded-2xl border border-slate-200/90 bg-card shadow-[0_5px_16px_rgba(15,23,42,0.06)] transition-shadow duration-200 hover:shadow-[0_7px_20px_rgba(15,23,42,0.09)]">
+        <div className="edgeever-create-memo-split flex overflow-hidden rounded-xl bg-emerald-600 text-white shadow-[0_6px_18px_rgba(6,95,70,0.22)] transition-shadow duration-200 hover:shadow-[0_8px_22px_rgba(6,95,70,0.28)]">
           <button
-            className="group flex h-12 max-w-[calc(100%-2.25rem)] shrink-0 items-center gap-2 px-2.5 text-left transition-colors duration-150 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="group flex h-12 max-w-[calc(100%-2.25rem)] shrink-0 items-center gap-2 px-2.5 text-left transition-colors duration-150 hover:bg-emerald-700 focus-visible:bg-emerald-700 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             aria-label={t("notebookPane.newMemo")}
             onClick={() => onCreateMemo()}
             disabled={!canCreateMemo || isCreatingMemo}
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_5px_12px_rgb(var(--brand-green-rgb)/0.22)] transition-transform duration-150 group-hover:scale-[1.03] group-focus-visible:ring-2 group-focus-visible:ring-slate-900/20 group-focus-visible:ring-offset-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition-transform duration-150 group-hover:scale-[1.03] group-focus-visible:ring-2 group-focus-visible:ring-white/40 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-emerald-700">
               <Plus className="h-5 w-5" />
             </span>
-            <span className="whitespace-nowrap text-sm font-semibold text-slate-950">{t("notebookPane.newMemo")}</span>
+            <span className="whitespace-nowrap text-sm font-semibold text-white">{t("notebookPane.newMemo")}</span>
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="group relative flex h-12 min-w-9 flex-1 items-center justify-center gap-0.5 px-1.5 text-xs font-medium text-slate-600 transition-colors before:absolute before:inset-y-2.5 before:left-0 before:w-px before:bg-[var(--workspace-divider)] hover:bg-workspace-hover hover:text-slate-950 focus-visible:bg-workspace-hover focus-visible:text-slate-950 focus-visible:outline-none data-[state=open]:bg-workspace-selection data-[state=open]:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                className="group relative flex h-12 min-w-9 flex-1 items-center justify-center gap-0.5 px-1.5 text-xs font-medium text-white/80 transition-colors before:absolute before:inset-y-2.5 before:left-0 before:w-px before:bg-white/20 hover:bg-emerald-700 hover:text-white focus-visible:bg-emerald-700 focus-visible:text-white focus-visible:outline-none data-[state=open]:bg-emerald-700 data-[state=open]:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 type="button"
                 aria-label={t("diagram.createType")}
                 disabled={!canCreateMemo || isCreatingMemo}

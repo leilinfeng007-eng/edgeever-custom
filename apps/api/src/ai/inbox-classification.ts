@@ -123,18 +123,89 @@ export const getDestinations = async (db: DatabaseAdapter, workspaceId: string) 
       FROM notebooks n
       WHERE n.workspace_id = ? AND n.is_deleted = 0 AND n.parent_id IS NULL
         AND NOT COALESCE(${inboxNotebookIdentitySql("n")}, 0)
-        AND n.id NOT IN ('nb_demo_features', 'nb_demo_features_en')
-        AND lower(n.name) NOT IN ('edgeever 功能演示', 'edgeever feature demos')
+        AND COALESCE(n.slug, '') NOT IN ('demo-features', 'demo-features-zh', 'feature-demos')
+        AND lower(n.name) NOT IN ('edgeever 功能演示', 'edgeever feature demos', '中文功能演示', '英文功能演示', '功能演示', 'feature demos')
       UNION ALL
       SELECT n.id, n.name, n.parent_id, e.path || ' / ' || n.name
       FROM notebooks n JOIN eligible e ON e.id = n.parent_id
       WHERE n.workspace_id = ? AND n.is_deleted = 0 AND NOT COALESCE(${inboxNotebookIdentitySql("n")}, 0)
-        AND n.id NOT IN ('nb_demo_features', 'nb_demo_features_en')
-        AND lower(n.name) NOT IN ('edgeever 功能演示', 'edgeever feature demos')
+        AND COALESCE(n.slug, '') NOT IN ('demo-features', 'demo-features-zh', 'feature-demos')
+        AND lower(n.name) NOT IN ('edgeever 功能演示', 'edgeever feature demos', '中文功能演示', '英文功能演示', '功能演示', 'feature demos')
     )
     SELECT id, name, parent_id, path FROM eligible ORDER BY path, id
   `).bind(workspaceId, workspaceId).all<Destination>()
 ).results;
+
+const liveInbox = `n.is_deleted = 0 AND ${inboxNotebookIdentitySql("n")}`;
+
+export type InboxClassificationStatus = {
+  notebookId: string;
+  inInbox: boolean;
+  sourceInboxId: string | null;
+  status: string | null;
+  outcome: string | null;
+  attempts: number;
+  reason: string | null;
+  destinationId: string | null;
+  destinationName: string | null;
+  revision: number;
+  resultRevision: number | null;
+  suggestedTags: string[];
+  canUndo: boolean;
+  canApply: boolean;
+};
+
+/** 读取单条笔记的分类状态；与 HTTP 路由共用，MCP 只读暴露。 */
+export async function getInboxClassificationStatus(
+  db: DatabaseAdapter,
+  workspaceId: string,
+  memoId: string,
+): Promise<InboxClassificationStatus | null> {
+  const row = await db.prepare(`
+    SELECT m.notebook_id AS notebookId, COALESCE((${liveInbox}), 0) AS inInbox,
+      j.inbox_id AS sourceInboxId, j.status, j.outcome, j.attempts, j.reason,
+      d.id AS destinationId, d.name AS destinationName, j.result_revision AS resultRevision,
+      j.suggested_tags AS suggestedTags, c.revision,
+      CASE WHEN j.status = 'moved' AND j.result_revision = c.revision AND m.notebook_id = j.destination_id
+        AND s.id IS NOT NULL THEN 1 ELSE 0 END AS canUndo
+    FROM memos m
+    JOIN memo_contents c ON c.memo_id = m.id
+    JOIN notebooks n ON n.id = m.notebook_id AND n.workspace_id = m.workspace_id
+    LEFT JOIN inbox_classification_jobs j ON j.memo_id = m.id AND j.workspace_id = m.workspace_id
+    LEFT JOIN notebooks d ON d.id = COALESCE(j.destination_id, CASE WHEN j.status = 'moved' THEN m.notebook_id END)
+      AND d.workspace_id = m.workspace_id AND d.is_deleted = 0
+    LEFT JOIN notebooks s ON s.id = j.inbox_id AND s.workspace_id = m.workspace_id AND s.is_deleted = 0
+    WHERE m.id = ? AND m.workspace_id = ? AND m.is_deleted = 0 AND m.is_archived = 0 AND n.is_deleted = 0
+  `).bind(memoId, workspaceId).first<{
+    notebookId: string; inInbox: number; sourceInboxId: string | null; status: string | null; outcome: string | null;
+    attempts: number | null; reason: string | null; destinationId: string | null; destinationName: string | null;
+    resultRevision: number | null; suggestedTags: string | null; revision: number; canUndo: number;
+  }>();
+  if (!row) return null;
+  let suggestedTags: string[] = [];
+  try {
+    const parsed = JSON.parse(row.suggestedTags ?? "[]");
+    if (Array.isArray(parsed)) suggestedTags = parsed.filter((tag): tag is string => typeof tag === "string");
+  } catch {
+    suggestedTags = [];
+  }
+  return {
+    notebookId: row.notebookId,
+    inInbox: Boolean(row.inInbox),
+    sourceInboxId: row.sourceInboxId,
+    status: row.status,
+    outcome: row.outcome,
+    attempts: row.attempts ?? 0,
+    reason: row.reason,
+    destinationId: row.destinationId,
+    destinationName: row.destinationName,
+    revision: row.revision,
+    resultRevision: row.resultRevision,
+    suggestedTags,
+    canUndo: Boolean(row.canUndo),
+    canApply: row.outcome === "review_recommended" && Boolean(row.inInbox && row.destinationId) && row.resultRevision === row.revision,
+  };
+}
 
 export const classificationTags = (memo: MemoDetail, tags: string[]) => {
   const seen = new Set(memo.tags.map(tag => tag.toLocaleLowerCase()));

@@ -25,8 +25,9 @@ import { upsertMemoSearchDocumentStatement } from "../notes/memo-search-index";
 import type { DatabaseAdapter, PreparedStatementAdapter } from "../storage/storage-contract";
 
 const EXAMPLE_NOTEBOOKS = [
-  { id: "nb_demo_features", slug: "demo-features", name: "功能演示", sortOrder: 21 },
-  { id: "nb_demo_features_en", slug: "feature-demos", name: "Feature Demos", sortOrder: 22 },
+  { id: "nb_demo_features", slug: "demo-features", name: "EdgeEver 功能演示", sortOrder: 21, parentId: null },
+  { id: "nb_demo_features_zh", slug: "demo-features-zh", name: "中文功能演示", sortOrder: 1, parentId: "nb_demo_features" },
+  { id: "nb_demo_features_en", slug: "feature-demos", name: "英文功能演示", sortOrder: 2, parentId: "nb_demo_features" },
 ] as const;
 
 const WELCOME_MEMO_ID = "memo_welcome";
@@ -179,7 +180,16 @@ export const ensureWorkspaceExampleSeed = async (env: Bindings, workspaceId: str
       `INSERT OR IGNORE INTO notebooks (
          id, workspace_id, parent_id, name, slug, icon, color, sort_order, is_deleted, created_at, updated_at, deleted_at
        ) VALUES (?, ?, ?, ?, ?, 'notebook', NULL, ?, 0, ?, ?, NULL)`,
-    ).bind(mapId(notebook.id), workspaceId, projects.id, notebook.name, notebook.slug, notebook.sortOrder, now, now));
+    ).bind(
+      mapId(notebook.id),
+      workspaceId,
+      notebook.parentId ? mapId(notebook.parentId) : null,
+      notebook.name,
+      notebook.slug,
+      notebook.sortOrder,
+      now,
+      now,
+    ));
   }
 
   for (const memo of DEMO_SEED_MEMOS) {

@@ -3780,7 +3780,7 @@ export const zhTW = {
     previewTemplate: "預覽",
     previewTitle: "模板結構預覽",
     createDescription: "從零開始建立一個可重複使用的模板。",
-    myTemplates: "模板",
+    myTemplates: "我的範本",
     savedDescription: "可重複使用的筆記模板。",
     emptyMyTemplates: "暫無模板",
     emptyMyTemplatesHint: "你可以點選上方「新建模板」，或在筆記編輯器中將常用筆記另存為模板。",

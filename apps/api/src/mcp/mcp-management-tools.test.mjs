@@ -123,7 +123,7 @@ describe("MCP template and AI instruction management", () => {
     const db = context.env.storage.db;
     for (const size of [12, 36]) {
       for (let index = sqlite.query("SELECT count(*) AS total FROM memos").get().total; index < size; index++) {
-        await callMcpTool(context, auth, "create_memo", { notebookId: "nb_budget", title: String(index), contentMarkdown });
+        await callMcpTool(context, auth, "create_memo", { notebookId: "nb_budget", title: String(index), contentMarkdown, allowDuplicate: true });
       }
       for (const limit of [1, 5, 10]) {
         const reads = [];

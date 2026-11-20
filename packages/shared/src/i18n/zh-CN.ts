@@ -3780,7 +3780,7 @@ export const zhCN = {
     previewTemplate: "预览",
     previewTitle: "模板结构预览",
     createDescription: "从零开始创建一个可重复使用的模板。",
-    myTemplates: "模板",
+    myTemplates: "我的模板",
     savedDescription: "可重复使用的笔记模板。",
     emptyMyTemplates: "暂无模板",
     emptyMyTemplatesHint: "你可以点击上方「新建模板」，或在笔记编辑器中将常用笔记另存为模板。",

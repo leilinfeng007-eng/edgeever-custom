@@ -215,3 +215,28 @@ docker run --rm -p 8787:8787 \
 
 Docker 首发版本不支持 PostgreSQL。它仍是未来的存储适配器，不会形成另一套
 业务代码分支。
+
+## 本 Fork 维护的自托管实例
+
+本节记录本 Fork 在自有主机上维护的实例的运行事实。不要把任何凭据写入本文件。
+
+| 项目 | 值 |
+| ---- | -- |
+| 公网域名 | `notes.leidadas.top`（解析到 `129.204.53.73`） |
+| 反向代理 | 在 `80` 端口提供 HTTP，并转发到容器的 `8787` |
+| 对外暴露的容器端口 | `8787` 不对外发布 |
+| 持久化 | `/data` 卷：`edgeever.sqlite`、`edgeever-secrets.json`、`resources/` |
+| 健康检查 | `curl -fsS http://notes.leidadas.top/api/health` 返回 `200` 且 `"ok": true` |
+
+线上实例已确认：`runtime=self-hosted-bun`（自托管 Docker 运行时）、
+`storage=sqlite`/`filesystem`、`objectStorageProvider=builtin`、
+`authMode=required`。
+
+更新与回滚遵循[升级与回滚](#升级与回滚)：把 `EDGE_EVER_VERSION` 固定到不可变
+发布标签，然后执行 `docker compose pull` 与 `docker compose up -d`。容器会在
+接收流量前应用 `migrations/*.sql`；请先备份 `/data`，因为回退镜像不会逆向撤销
+数据库 migration。
+
+服务端访问：SSH 连接 `129.204.53.73:22` 当前在 SSH 密钥交换阶段被重置，因此
+无法读取主机身份、Docker/Compose 版本、运行容器和部署目录。在规划服务端变更
+前，请先恢复 SSH 通道（密钥、非默认端口或代理）。

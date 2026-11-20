@@ -16,11 +16,15 @@ type McpAttachmentResult = {
   format: "text" | "image" | "original";
   nextOffset?: number | null;
   totalCharacters?: number;
+  pageStart?: number;
+  pageEnd?: number;
+  pageCount?: number;
   contentBlock: McpAttachmentContent;
 };
 
-// content 模式：白名单图片返回 image/base64；Word/文本返回分页 text；original 返回原始 resource/blob。
-// 图片/原文件各限 2 MiB，Word 8 MiB（正文 XML 解压限 2 MiB），文本 1 MiB；每页最多 12,000 UTF-16 单元。
+// content 模式：白名单图片返回 image/base64；Word/文本/文字型 PDF 返回分页 text；original 返回原始 resource/blob。
+// 图片/原文件各限 2 MiB，Word 8 MiB（正文 XML 解压限 2 MiB），PDF 16 MiB（提取文本限 2 MiB），文本 1 MiB；每页最多 12,000 UTF-16 单元。
+// PDF 返回 pageStart/pageEnd/pageCount；扫描件、加密、损坏和超限直接抛业务错误，不做 OCR、不伪造正文。
 // 读取必须同时匹配工作区、笔记和资源；不支持/超限/损坏直接抛业务错误，不自动换模式。
 export async function readMcpAttachment(env: Bindings, workspaceId: string, args: Record<string, unknown>): Promise<McpAttachmentResult> {
   const memoId = getRequiredString(args.memoId, "memoId");

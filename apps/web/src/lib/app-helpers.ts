@@ -162,13 +162,30 @@ export const NOTEBOOK_SORT_STORAGE_KEY = "edgeever.notebookSort";
 export const NOTEBOOK_TREE_COLLAPSED_IDS_STORAGE_KEY = "edgeever.notebookTreeCollapsedIds:v1";
 export const NOTEBOOK_SECTION_COLLAPSED_STORAGE_KEY = "edgeever.notebookSectionCollapsed";
 export const SHORTCUT_SETTINGS_STORAGE_KEY = "edgeever.shortcutSettings";
-export const DEFAULT_MEMO_LIST_WIDTH_PX = 360;
-export const MIN_MEMO_LIST_WIDTH_PX = 300;
+export const DEFAULT_MEMO_LIST_WIDTH_PX = 336;
+export const MIN_MEMO_LIST_WIDTH_PX = 296;
 export const MAX_MEMO_LIST_WIDTH_PX = 800;
 export const MIN_EDITOR_WIDTH_PX = 640;
-export const DEFAULT_NOTEBOOK_SIDEBAR_WIDTH_PX = 240;
+
+export const DEFAULT_NOTEBOOK_SIDEBAR_WIDTH_PX = 224;
 export const MIN_NOTEBOOK_SIDEBAR_WIDTH_PX = 180;
 export const MAX_NOTEBOOK_SIDEBAR_WIDTH_PX = 420;
+const LAYOUT_DEFAULTS_MIGRATION_KEY = "edgeever.layoutDefaults.v2";
+
+const migrateLegacyLayoutDefaults = () => {
+  try {
+    if (window.localStorage.getItem(LAYOUT_DEFAULTS_MIGRATION_KEY)) return;
+    if (window.localStorage.getItem(NOTEBOOK_SIDEBAR_WIDTH_STORAGE_KEY) === "240") {
+      window.localStorage.setItem(NOTEBOOK_SIDEBAR_WIDTH_STORAGE_KEY, String(DEFAULT_NOTEBOOK_SIDEBAR_WIDTH_PX));
+    }
+    if (window.localStorage.getItem(MEMO_LIST_WIDTH_STORAGE_KEY) === "360") {
+      window.localStorage.setItem(MEMO_LIST_WIDTH_STORAGE_KEY, String(DEFAULT_MEMO_LIST_WIDTH_PX));
+    }
+    window.localStorage.setItem(LAYOUT_DEFAULTS_MIGRATION_KEY, "1");
+  } catch {
+    // Private or restricted contexts simply keep their current preference.
+  }
+};
 export const EDITOR_LOCAL_SAVE_DELAY_MS = 1_200;
 
 export const MEMO_DRAG_MIME = "application/x-edgeever-memos";
@@ -364,6 +381,7 @@ export const clampNotebookSidebarWidth = (width: number) =>
 
 export const readNotebookSidebarWidthPreference = () => {
   try {
+    migrateLegacyLayoutDefaults();
     const storedWidth = window.localStorage.getItem(NOTEBOOK_SIDEBAR_WIDTH_STORAGE_KEY);
     if (storedWidth === null) return DEFAULT_NOTEBOOK_SIDEBAR_WIDTH_PX;
     const width = Number(storedWidth);
@@ -517,6 +535,7 @@ export const getEditorPaneWidths = (viewportWidth: number, sidebarWidth: number,
 
 export const readMemoListWidthPreference = () => {
   try {
+    migrateLegacyLayoutDefaults();
     const storedWidth = window.localStorage.getItem(MEMO_LIST_WIDTH_STORAGE_KEY);
     if (storedWidth === null) return DEFAULT_MEMO_LIST_WIDTH_PX;
     const width = Number(storedWidth);

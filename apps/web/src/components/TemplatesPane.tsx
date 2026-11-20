@@ -29,6 +29,16 @@ import { ClipboardCopyNotice } from "@/components/ClipboardCopyNotice";
 import type { MemoTemplate as SavedMemoTemplate } from "@edgeever/shared";
 import { ExecutionCenterButton } from "@/components/execution/ExecutionCenterButton";
 
+const templateTone = (tags: string[]) => {
+  const set = new Set(tags.map(tag => tag.toLocaleLowerCase()));
+  if (set.has("meeting")) return "bg-sky-50 text-sky-700 ring-sky-600/10 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20";
+  if (set.has("okr")) return "bg-amber-50 text-amber-700 ring-amber-600/10";
+  if (set.has("reading")) return "bg-violet-50 text-violet-700 ring-violet-600/10 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-400/20";
+  if (set.has("quick-note")) return "bg-rose-50 text-rose-700 ring-rose-600/10";
+  if (set.has("weekly-review")) return "bg-blue-50 text-blue-700 ring-blue-600/10 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-400/20";
+  return "bg-emerald-50 text-emerald-700 ring-emerald-600/10";
+};
+
 const TemplateIconAction = ({
   children,
   className,
@@ -216,17 +226,18 @@ export const TemplatesPane = ({
 
       {/* Main Content Area */}
       <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
-        <div className="mx-auto w-full max-w-5xl space-y-8">
+        <div className="mx-auto w-full max-w-6xl space-y-8">
 
           <section>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-[-0.01em] text-slate-900 ">
                   <span>{t("templates.myTemplates")}</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10">
                     {savedTemplates.length}
                   </span>
                 </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("templates.savedDescription")}</p>
               </div>
               {!creatingTemplate && !editingTemplate && (
                 <Button
@@ -358,11 +369,11 @@ export const TemplatesPane = ({
 
             {/* Templates Grid */}
             {savedTemplates.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {templateCards.map(({ template: storedTemplate, display: template }) => (
                   <div
                     key={template.id}
-                    className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-slate-200 bg-card p-4 transition-all duration-200 hover:border-slate-300 hover:shadow-md"
+                    className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-slate-200/90 bg-card p-3.5 transition-all duration-200 hover:border-slate-300 hover:shadow-[0_2px_10px_rgba(15,23,42,0.05)] dark:border-white/10 dark:hover:border-white/20"
                     onClick={() =>
                       setPreviewTemplate({
                         title: template.name,
@@ -379,21 +390,21 @@ export const TemplatesPane = ({
                     <div>
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-800">
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${templateTone(template.tags)}`}>
                             <FilePlus className="h-4 w-4" />
                           </span>
-                          <h3 className="truncate text-sm font-semibold text-slate-900">{template.name}</h3>
+                          <h3 className="truncate text-[13.5px] font-semibold text-slate-900 ">{template.name}</h3>
                         </div>
                       </div>
 
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500 min-h-[2.25rem]">
+                      <p className="mt-1 line-clamp-2 min-h-[2.3rem] text-[11.5px] leading-[1.55] text-slate-500 dark:text-slate-400">
                         {template.description || template.title || t("templates.savedDescription")}
                       </p>
 
                       {template.tags.length > 0 && (
-                        <div className="mt-2.5 flex flex-wrap gap-1">
+                        <div className="mt-2 flex flex-wrap gap-1">
                           {template.tags.map((tag) => (
-                            <span key={tag} className="inline-flex items-center gap-0.5 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+                            <span key={tag} className="inline-flex items-center gap-0.5 rounded-md bg-slate-100/80 px-1.5 py-0.5 text-[10.5px] text-slate-500 dark:bg-white/5 dark:text-slate-400">
                               <Tag className="h-2.5 w-2.5 text-slate-400" />
                               {tag}
                             </span>
@@ -402,7 +413,7 @@ export const TemplatesPane = ({
                       )}
                     </div>
 
-                    <div className="mt-4 border-t border-slate-100 pt-3 flex items-center justify-between gap-2">
+                    <div className="mt-3 border-t border-slate-100 pt-2.5 flex items-center justify-between gap-2 dark:border-white/10">
                       <div className="flex items-center gap-1 text-slate-400">
                         <TemplateIconAction
                           className="p-1 hover:text-slate-700 transition rounded-md hover:bg-slate-100"
@@ -490,23 +501,23 @@ export const TemplatesPane = ({
 
           <section>
             <div className="mb-4">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-[-0.01em] text-slate-900 ">
                 <span>{t("templates.gallery")}</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-white/5">
                   {galleryEntries.length}
                 </span>
               </h2>
-              <p className="mt-1 text-xs text-slate-500">{t("templates.galleryHint")}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("templates.galleryHint")}</p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {galleryEntries.map((entry) => {
                 const added = addedGalleryTags.has(entry.key);
                 const addDisabled = isCreating || addingGalleryKey !== null;
                 return (
                   <div
                     key={entry.key}
-                    className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-slate-200 bg-card p-4 transition-all duration-200 hover:border-slate-300 hover:shadow-md"
+                    className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-slate-200/90 bg-card p-3.5 transition-all duration-200 hover:border-slate-300 hover:shadow-[0_2px_10px_rgba(15,23,42,0.05)] dark:border-white/10 dark:hover:border-white/20"
                     onClick={() =>
                       setPreviewTemplate({
                         title: entry.name,
@@ -522,17 +533,17 @@ export const TemplatesPane = ({
                   >
                     <div>
                       <div className="mb-2 flex items-center gap-2 min-w-0">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-800">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 dark:bg-white/5 dark:ring-white/10">
                           <LibraryBig className="h-4 w-4" />
                         </span>
-                        <h3 className="truncate text-sm font-semibold text-slate-900">{entry.name}</h3>
+                        <h3 className="truncate text-[13.5px] font-semibold text-slate-900 ">{entry.name}</h3>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500 min-h-[2.25rem]">
+                      <p className="mt-1 line-clamp-2 min-h-[2.3rem] text-[11.5px] leading-[1.55] text-slate-500 dark:text-slate-400">
                         {entry.description}
                       </p>
                     </div>
 
-                    <div className="mt-4 border-t border-slate-100 pt-3 flex items-center justify-between gap-2">
+                    <div className="mt-3 border-t border-slate-100 pt-2.5 flex items-center justify-between gap-2 dark:border-white/10">
                       <div className="flex items-center gap-1 text-slate-400">
                         <TemplateIconAction
                           className="p-1 hover:text-slate-700 transition rounded-md hover:bg-slate-100"

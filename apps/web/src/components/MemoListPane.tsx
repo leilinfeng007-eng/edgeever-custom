@@ -1209,7 +1209,7 @@ export const MemoListPane = ({
           )}
           <div className="min-w-0">
             <div className={`truncate ${WORKSPACE_PAGE_TITLE_CLASSNAME}`}>{listTitle}</div>
-            <div className="mt-0.5 truncate text-xs text-slate-500">
+            <div className="mt-0.5 truncate text-[11.5px] text-slate-500">
               {listContextLabel} · {listCountLabel}
             </div>
           </div>
@@ -1218,11 +1218,10 @@ export const MemoListPane = ({
         <div className={cn("items-center gap-2", mobileSearchActive ? "hidden lg:flex" : "flex")}>
           <div
             className={cn(
-              "flex h-mobile-control min-w-0 flex-1 items-center gap-2 rounded-full border px-3 text-sm text-slate-500 transition-colors lg:rounded-md",
-              searchActive
-                ? "bg-[color-mix(in_srgb,var(--workspace-sidebar)_78%,var(--workspace-memo-list))] text-slate-700"
-                : "bg-[color-mix(in_srgb,var(--workspace-sidebar)_62%,var(--workspace-memo-list))] hover:bg-[color-mix(in_srgb,var(--workspace-sidebar)_72%,var(--workspace-memo-list))]",
-              searchFocused || searchActive ? "border-[var(--workspace-divider)]" : "border-transparent"
+              "flex h-mobile-control min-w-0 flex-1 items-center gap-2 rounded-full border px-3 text-sm text-slate-500 transition-all lg:rounded-lg",
+              searchActive || searchFocused
+                ? "border-emerald-500/40 bg-card text-slate-800 ring-2 ring-emerald-500/10"
+                : "border-[var(--workspace-divider)] bg-card hover:border-emerald-500/25"
             )}
           >
             <Search className="h-4 w-4 shrink-0" />

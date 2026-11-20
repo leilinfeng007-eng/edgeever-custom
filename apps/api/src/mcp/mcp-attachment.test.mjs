@@ -61,7 +61,7 @@ async function withInstance(run) {
       return result;
     };
     const create = async (title = "附件验收") => (await ok("create_memo", {
-      title, notebookId: "nb_attachment_test", contentMarkdown: "笔记正文不包含附件内容。",
+      title, notebookId: "nb_attachment_test", contentMarkdown: `笔记正文不包含附件内容：${title}`,
     })).structuredContent.memo.id;
     const upload = async (memoId, filename, mimeType, dataBase64, image = false) =>
       (await ok(image ? "upload_memo_image" : "upload_memo_attachment", {
@@ -79,7 +79,7 @@ async function withInstance(run) {
 }
 
 test("MCP returns attached original images, Word text, and original documents in different content blocks", async () => {
-  await withInstance(async ({ create, upload, ok, tool, rpc, httpContent }) => {
+  await withInstance(async ({ create, upload, ok, rpc, httpContent }) => {
     const memoId = await create();
     const found = await ok("search_memos", { query: "附件验收" });
     expect(found.structuredContent.memos.map(memo => memo.id)).toContain(memoId);
@@ -106,14 +106,29 @@ test("MCP returns attached original images, Word text, and original documents in
     const httpWord = await httpContent(memoId, word.id);
     expect(httpWord.status).toBe(200);
     expect(httpWord.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(await httpWord.json()).toEqual({ text: text.structuredContent.text, nextOffset: null });
+    expect(await httpWord.json()).toEqual({
+      text: text.structuredContent.text,
+      nextOffset: null,
+      totalCharacters: text.structuredContent.totalCharacters,
+    });
     expect((await httpContent(memoId, png.id)).status).toBe(422);
     expect((await httpContent(memoId, word.id, 0, "fixture-no-resource")).status).toBe(403);
     const tail = await httpContent(memoId, word.id, 4);
-    expect(await tail.json()).toEqual({ text: text.structuredContent.text.slice(4), nextOffset: null });
+    expect(await tail.json()).toEqual({
+      text: text.structuredContent.text.slice(4),
+      nextOffset: null,
+      totalCharacters: text.structuredContent.totalCharacters,
+    });
 
-    const nominal = await tool("read_memo_attachment", { memoId, resourceId: pdf.id });
-    expect(nominal.structuredContent.error.code).toBe("attachment_format_unsupported");
+    const nominal = await ok("read_memo_attachment", { memoId, resourceId: pdf.id });
+    expect(nominal.structuredContent).toMatchObject({
+      format: "text", nextOffset: null, pageStart: 1, pageEnd: 1, pageCount: 1,
+    });
+    expect(nominal.content[1]).toEqual({ type: "text", text: "EdgeEver demo PDF" });
+    const httpPdf = await httpContent(memoId, pdf.id);
+    expect(await httpPdf.json()).toEqual({
+      text: "EdgeEver demo PDF", nextOffset: null, totalCharacters: 17, pageStart: 1, pageEnd: 1, pageCount: 1,
+    });
     const original = await ok("read_memo_attachment", { memoId, resourceId: pdf.id, mode: "original" });
     expect(original.content[1]).toEqual({ type: "resource", resource: {
       uri: `edgeever://attachment/${pdf.id}`, mimeType: "application/pdf", blob: PDF.content,

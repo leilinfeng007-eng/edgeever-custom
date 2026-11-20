@@ -18,7 +18,12 @@ export function registerAttachmentContentRoute(app: Hono<AppEnv>) {
       const result = await readAttachmentContent(c.env, getWorkspaceId(c), { ...c.req.param(), offset, mode: "content" });
       if (result.format !== "text") return apiError(c, "attachment_format_unsupported", "Attachment text is unavailable.", 422);
       c.header("Cache-Control", "private, no-store");
-      return c.json({ text: result.text, nextOffset: result.nextOffset ?? null });
+      return c.json({
+        text: result.text,
+        nextOffset: result.nextOffset ?? null,
+        totalCharacters: result.totalCharacters,
+        ...("pageCount" in result ? { pageStart: result.pageStart, pageEnd: result.pageEnd, pageCount: result.pageCount } : {}),
+      });
     } catch (error) {
       if (error instanceof AppError) return apiError(c, error.code, error.message, error.status);
       throw error;

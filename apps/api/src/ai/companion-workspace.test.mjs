@@ -68,7 +68,7 @@ test("built-in tools read real image bytes and every Word page with workspace an
   expect(content.trim()).toBe(text);
   expect(JSON.stringify(session)).not.toContain(png);
   await expect(tools.read_memo_attachment.execute({memoId:other.id,resourceId:word.id})).rejects.toMatchObject({code:"attachment_not_found"});
-  await expect(tools.read_memo_attachment.execute({memoId:note.id,resourceId:pdf.id})).rejects.toMatchObject({code:"attachment_format_unsupported"});
+  await expect(tools.read_memo_attachment.execute({memoId:note.id,resourceId:pdf.id})).rejects.toMatchObject({code:"attachment_invalid_pdf"});
   await expect(f.tools().read_memo_attachment.execute({memoId:note.id,resourceId:pdf.id,mode:"original"})).rejects.toMatchObject({code:"attachment_format_unsupported"});
 }));
 

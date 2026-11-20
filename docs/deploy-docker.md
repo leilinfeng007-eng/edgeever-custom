@@ -230,3 +230,32 @@ docker run --rm -p 8787:8787 \
 
 PostgreSQL is not supported in the first Docker release. It remains a future
 storage adapter and will not introduce a separate business-code branch.
+
+## Self-hosted instance operated by this fork
+
+This section records operational facts for the instance this fork maintains on
+its own host. Keep credentials out of this file.
+
+| Item | Value |
+| ---- | ----- |
+| Public domain | `notes.leidadas.top` (resolves to `129.204.53.73`) |
+| Reverse proxy | Serves HTTP on port `80` and forwards to the container's `8787` |
+| Exposed container port | `8787` is not published to the internet |
+| Persistence | `/data` volume: `edgeever.sqlite`, `edgeever-secrets.json`, `resources/` |
+| Health check | `curl -fsS http://notes.leidadas.top/api/health` returns `200` with `"ok": true` |
+
+Verified against the running instance: `runtime=self-hosted-bun` (self-hosted
+Docker runtime), `storage=sqlite`/`filesystem`, `objectStorageProvider=builtin`,
+and `authMode=required`.
+
+Update and rollback follow [Upgrade and rollback](#upgrade-and-rollback): pin
+`EDGE_EVER_VERSION` to an immutable release tag, then run `docker compose pull`
+and `docker compose up -d`. The container applies `migrations/*.sql` before it
+accepts traffic; back up `/data` first, because an image rollback does not
+reverse a database migration.
+
+Server-side access: SSH to `129.204.53.73:22` currently resets during the SSH
+key exchange, so the host identity, Docker/Compose versions, running
+containers, and the deployment directory could not be read. Re-establish the
+SSH path (key, non-default port, or proxy) before planning a server-side
+change.

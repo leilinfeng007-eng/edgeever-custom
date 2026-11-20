@@ -49,7 +49,7 @@ export const MemoTitleInput = forwardRef<HTMLInputElement, MemoTitleInputProps>(
             ref={inputRef}
             aria-label={ariaLabel ?? placeholder}
             className={cn(
-              "block w-full min-w-0 truncate rounded-md border-0 bg-transparent px-2 py-1 text-sm font-semibold leading-tight text-slate-900 outline-none transition placeholder:text-slate-300 hover:bg-slate-100/60 focus-visible:bg-muted focus-visible:shadow-[inset_3px_0_0_rgb(var(--slate-950-rgb))] read-only:text-slate-600 read-only:hover:bg-transparent read-only:focus-visible:bg-transparent read-only:focus-visible:shadow-none sm:text-base",
+              "block w-full min-w-0 truncate rounded-lg border border-transparent bg-transparent px-2 py-1 text-[17px] font-semibold leading-tight tracking-[-0.015em] text-slate-900 outline-none transition placeholder:text-slate-300 hover:bg-emerald-50/50 focus-visible:border-emerald-500/30 focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-emerald-500/15 read-only:text-slate-600 read-only:hover:bg-transparent read-only:focus-visible:bg-transparent read-only:focus-visible:ring-0 sm:text-[18px]",
               className
             )}
             maxLength={160}

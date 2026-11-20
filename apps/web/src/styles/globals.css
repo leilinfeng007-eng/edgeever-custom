@@ -319,14 +319,14 @@
     --brand-green-800-rgb: 17 83 60;
     --brand-green-900-rgb: 15 68 50;
     --brand-green-950-rgb: 7 37 28;
-    --workspace-canvas: #eef1f4;
-    --workspace-sidebar: #e7ebef;
-    --workspace-memo-list: #f4f6f8;
-    --workspace-editor: #f8fafb;
-    --workspace-divider: #e1e5ea;
-    --workspace-memo-divider: #e6eaee;
-    --workspace-selection: #dde3e9;
-    --workspace-hover: color-mix(in srgb, var(--workspace-sidebar) 40%, white);
+    --workspace-canvas: #dfe9e3;
+    --workspace-sidebar: #e8f1eb;
+    --workspace-memo-list: #f3f8f5;
+    --workspace-editor: #ffffff;
+    --workspace-divider: #d7e3db;
+    --workspace-memo-divider: #e2ece6;
+    --workspace-selection: #d5eadf;
+    --workspace-hover: #edf5f0;
     --tooltip-bg: #ffffff;
     --tooltip-fg: #6b726e;
     --tooltip-border: #e1e5ea;
@@ -373,10 +373,10 @@
     --rose-950-rgb: 76 5 25;
     --blue-600-rgb: 37 99 235;
     --dark-surface-rgb: 255 255 255;
-    --editor-body-font-size: 1rem;
+    --editor-body-font-size: 1.0625rem;
     --edgeever-system-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
-    --editor-body-line-height: 1.65;
-    --editor-paragraph-spacing: 0.35rem;
+    --editor-body-line-height: 1.78;
+    --editor-paragraph-spacing: 0.55rem;
     --memo-content-divider-color: #1a1d21;
     --memo-content-divider-spacing: 1.5rem;
     --editor-outline-width: 300px;
@@ -421,33 +421,33 @@
 
 :root.dark {
   color-scheme: dark;
-  --background: 0 0% 7%;
-  --foreground: 0 0% 87%;
-  --card: 0 0% 12%;
-  --card-foreground: 0 0% 87%;
-  --popover: 0 0% 13%;
+  --background: 158 24% 6%;
+  --foreground: 150 10% 90%;
+  --card: 158 16% 12%;
+  --card-foreground: 150 10% 90%;
+  --popover: 158 16% 13%;
   --popover-foreground: 0 0% 87%;
   --primary: 0 0% 92%;
   --primary-foreground: 0 0% 7%;
   --secondary: 0 0% 18%;
   --secondary-foreground: 0 0% 90%;
-  --muted: 0 0% 18%;
-  --muted-foreground: 0 0% 63%;
-  --accent: 0 0% 18%;
-  --accent-foreground: 0 0% 93%;
+  --muted: 158 12% 18%;
+  --muted-foreground: 150 8% 65%;
+  --accent: 158 12% 18%;
+  --accent-foreground: 150 10% 93%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 96%;
-  --border: 0 0% 23%;
-  --input: 0 0% 23%;
-  --ring: 0 0% 75%;
-  --workspace-canvas: #121315;
-  --workspace-sidebar: #17181a;
-  --workspace-memo-list: #1d1e20;
-  --workspace-editor: #222325;
-  --workspace-divider: #323437;
-  --workspace-memo-divider: #383a3d;
-  --workspace-selection: #333638;
-  --workspace-hover: color-mix(in srgb, var(--workspace-sidebar) 90%, white);
+  --border: 158 12% 24%;
+  --input: 158 12% 24%;
+  --ring: 152 45% 55%;
+  --workspace-canvas: #0c1310;
+  --workspace-sidebar: #111a16;
+  --workspace-memo-list: #16221c;
+  --workspace-editor: #1b2721;
+  --workspace-divider: #2a3a32;
+  --workspace-memo-divider: #30423a;
+  --workspace-selection: #203a2d;
+  --workspace-hover: #1c2b24;
   --memo-content-divider-color: #62666b;
   --tooltip-bg: #303234;
   --tooltip-fg: #dedede;
@@ -1388,21 +1388,21 @@ html[data-edgeever-extension-theme] .edgeever-memo-divider {
 }
 
 .ProseMirror h1 {
-  font-size: 1.5em;
+  font-size: 1.55em;
   font-weight: 650;
-  line-height: 1.28;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.85rem;
-  color: #1a1d21;
+  line-height: 1.3;
+  letter-spacing: -0.022em;
+  margin: 0 0 1rem;
+  color: #14201a;
 }
 
 .ProseMirror h2 {
-  font-size: 1.25em;
-  font-weight: 600;
-  line-height: 1.32;
-  letter-spacing: -0.015em;
-  margin: 1.4rem 0 0.6rem;
-  color: #27272a;
+  font-size: 1.24em;
+  font-weight: 640;
+  line-height: 1.35;
+  letter-spacing: -0.016em;
+  margin: 1.8rem 0 0.7rem;
+  color: #1f2b25;
 }
 
 .ProseMirror h3 {
@@ -1410,8 +1410,8 @@ html[data-edgeever-extension-theme] .edgeever-memo-divider {
   font-weight: 600;
   line-height: 1.38;
   letter-spacing: -0.01em;
-  margin: 1.15rem 0 0.5rem;
-  color: #27272a;
+  margin: 1.4rem 0 0.5rem;
+  color: #1f2b25;
 }
 
 .ProseMirror h4 {
@@ -2654,12 +2654,12 @@ html[data-edgeever-extension-theme] .edgeever-memo-divider {
   border-top: 1px solid #e2e8f0;
 }
 .markdown-content blockquote {
-  border-left: 4px solid var(--brand-green);
-  padding: 0.5rem 0 0.5rem 1rem;
+  border: 1px solid var(--brand-green-border);
+  padding: 0.75rem 1rem;
   background-color: var(--brand-green-soft);
   color: var(--brand-green-text);
   font-weight: 500;
-  border-radius: 0 4px 4px 0;
+  border-radius: 10px;
   margin: 1.25rem auto;
 }
 .markdown-content ul {

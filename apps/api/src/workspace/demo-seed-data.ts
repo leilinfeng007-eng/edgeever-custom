@@ -23,8 +23,9 @@ export const DEMO_SEED_NOTEBOOKS = [
   { id: "nb_learning", parentId: null, name: "学习资料", slug: "learning-resources", icon: "notebook", color: null, sortOrder: 30 },
   { id: "nb_creative", parentId: null, name: "灵感创作", slug: "creative-ideas", icon: "notebook", color: null, sortOrder: 40 },
   { id: "nb_personal", parentId: null, name: "生活个人", slug: "personal-life", icon: "notebook", color: null, sortOrder: 50 },
-  { id: "nb_demo_features", parentId: "nb_projects", name: "功能演示", slug: "demo-features", icon: "notebook", color: null, sortOrder: 21 },
-  { id: "nb_demo_features_en", parentId: "nb_projects", name: "Feature Demos", slug: "feature-demos", icon: "notebook", color: null, sortOrder: 22 },
+  { id: "nb_demo_features", parentId: null, name: "EdgeEver 功能演示", slug: "demo-features", icon: "notebook", color: null, sortOrder: 21 },
+  { id: "nb_demo_features_zh", parentId: "nb_demo_features", name: "中文功能演示", slug: "demo-features-zh", icon: "notebook", color: null, sortOrder: 1 },
+  { id: "nb_demo_features_en", parentId: "nb_demo_features", name: "英文功能演示", slug: "feature-demos", icon: "notebook", color: null, sortOrder: 2 },
 ];
 
 export const DEMO_ARCHITECTURE_DIAGRAM_ZH: DiagramDocument = {
@@ -968,7 +969,7 @@ export const DEMO_TABLE_DOCUMENT_EN: TableDocument = {
 export const DEMO_SEED_MEMOS_ZH = [
   {
     id: "memo_demo_overview",
-    notebookId: "nb_demo_features",
+    notebookId: "nb_demo_features_zh",
     title: "欢迎使用 EdgeEver：为极客与创作者打造的现代开源知识库",
     tags: ["overview", "guide", "features", "ai-agent"],
     isPinned: true,
@@ -1191,7 +1192,7 @@ sequenceDiagram
   },
   {
     id: "memo_demo_poster",
-    notebookId: "nb_demo_features",
+    notebookId: "nb_demo_features_zh",
     title: "视觉排版：EdgeEver 极客第二大脑设计海报",
     tags: ["poster", "design", "visual-layout", "branding"],
     isPinned: false,
@@ -1199,7 +1200,7 @@ sequenceDiagram
   },
   {
     id: "memo_demo_infographic",
-    notebookId: "nb_demo_features",
+    notebookId: "nb_demo_features_zh",
     title: "演进里程碑：EdgeEver 全平台架构与版本演进史",
     tags: ["infographic", "milestone", "timeline", "ai-agent"],
     isPinned: false,
@@ -1207,7 +1208,7 @@ sequenceDiagram
   },
   {
     id: "memo_demo_table",
-    notebookId: "nb_demo_features",
+    notebookId: "nb_demo_features_zh",
     title: "交付追踪：EdgeEver 核心产品特性规划与进度表",
     tags: ["table", "roadmap", "project-management", "tracking"],
     isPinned: false,
@@ -1215,7 +1216,7 @@ sequenceDiagram
   },
   {
     id: "memo_demo_architecture",
-    notebookId: "nb_demo_features",
+    notebookId: "nb_demo_features_zh",
     title: "系统架构：EdgeEver 可移植全栈与 AI 协同",
     tags: ["architecture", "diagram", "portable-runtime", "cloud-native", "mcp"],
     isPinned: false,
@@ -1223,7 +1224,7 @@ sequenceDiagram
   },
   {
     id: "memo_demo_flowchart",
-    notebookId: "nb_demo_features",
+    notebookId: "nb_demo_features_zh",
     title: "知识工作流：从捕捉灵感到发布分享的流程图",
     tags: ["flowchart", "diagram", "workflow", "knowledge-management"],
     isPinned: false,
@@ -1231,7 +1232,7 @@ sequenceDiagram
   },
   {
     id: "memo_demo_mind_map",
-    notebookId: "nb_demo_features",
+    notebookId: "nb_demo_features_zh",
     title: "第二大脑：个人知识管理体系思维导图",
     tags: ["mind-map", "diagram", "second-brain", "knowledge-management"],
     isPinned: false,

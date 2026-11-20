@@ -26,7 +26,7 @@ export async function stageMemoResource(
   }
   const upload = await createPendingResourceUpload(context, auth, {
     ...input,
-    label: input.kind === "attachment" ? `Attachment: ${input.label ?? input.filename ?? "file"}` : input.label,
+    label: input.kind === "attachment" ? `附件：${input.label ?? input.filename ?? "file"}` : input.label,
     byteSize: bytes.byteLength,
   });
   const { body } = await consumePendingResourceUpload(context, {
@@ -57,13 +57,32 @@ function referencedResources(doc: TiptapNode) {
   return ids;
 }
 
+function referenceCounts(doc: TiptapNode) {
+  const counts = new Map<string, number>();
+  const add = (value: unknown) => {
+    if (typeof value !== "string" || !value.startsWith("/api/v1/resources/")) return;
+    const id = getResourceIdFromUrl(value);
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  };
+  function visit(node: TiptapNode | TiptapTextNode) {
+    if ("marks" in node) for (const mark of node.marks ?? []) add(mark.attrs?.href);
+    if ("attrs" in node) {
+      add(node.attrs?.src);
+      add(node.attrs?.url);
+    }
+    if ("content" in node) for (const child of node.content ?? []) visit(child);
+  }
+  visit(doc);
+  return counts;
+}
+
 /** Check references on the parsed document so examples inside code fences do not count. */
 export async function validateMcpResourcePlacement(
   db: DatabaseAdapter,
   workspaceId: string,
   markdown: string,
   pendingIds: string[],
-  existing?: { id: string; contentMarkdown: string; allowRemoval: boolean },
+  existing?: { id: string; contentMarkdown: string; allowRemoval: boolean; allowDuplicateReferences?: boolean },
 ) {
   if (!pendingIds.length && (!existing || existing.allowRemoval)) return;
   const referenced = referencedResources(markdownToDoc(markdown));
@@ -72,7 +91,21 @@ export async function validateMcpResourcePlacement(
       throw new AppError("attachment_position_required", `Insert the returned Markdown for resource ${id} in its intended section.`, 400);
     }
   }
-  if (!existing || existing.allowRemoval) return;
+  if (!existing) return;
+  if (!existing.allowDuplicateReferences) {
+    const before = referenceCounts(markdownToDoc(existing.contentMarkdown));
+    for (const [id, count] of referenceCounts(markdownToDoc(markdown))) {
+      const previous = before.get(id) ?? 0;
+      if (previous > 0 && count > previous) {
+        throw new AppError(
+          "attachment_duplicate_reference",
+          `Resource ${id} is already referenced in this note. Keep one reference or explicitly allow duplicate references.`,
+          409,
+        );
+      }
+    }
+  }
+  if (existing.allowRemoval) return;
   const removed = [...referencedResources(markdownToDoc(existing.contentMarkdown))].filter(id => !referenced.has(id));
   if (!removed.length) return;
   const chunk = removed.slice(0, 80);

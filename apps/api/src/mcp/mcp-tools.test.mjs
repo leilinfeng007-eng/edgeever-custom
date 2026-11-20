@@ -36,6 +36,25 @@ describe("MCP tool catalog", () => {
       destructiveHint: false,
       idempotentHint: true,
     });
+    expect(byName.get("get_inbox_classification")?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    });
+    expect(byName.get("get_inbox_classification")?.inputSchema).toMatchObject({
+      required: ["memoId"],
+      properties: { memoId: { type: "string", minLength: 1 } },
+    });
+    expect(byName.get("create_memo")?.inputSchema.properties.purpose.enum).toContain("verbatim");
+    expect(byName.get("create_memo")?.inputSchema.properties).toMatchObject({
+      source: { type: "string", maxLength: 80 },
+      sourceId: { type: "string", maxLength: 512 },
+    });
+    expect(byName.get("update_memo")?.inputSchema.properties.sectionOperations).toMatchObject({
+      minItems: 1,
+      maxItems: 20,
+      items: { required: ["heading", "mode", "contentMarkdown"] },
+    });
     expect(byName.get("trash_memos")?.annotations).toMatchObject({
       readOnlyHint: false,
       destructiveHint: true,

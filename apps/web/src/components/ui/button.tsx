@@ -8,14 +8,14 @@ const ButtonTooltip = React.lazy(() =>
 );
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center rounded-md font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex shrink-0 items-center justify-center rounded-lg font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        solid: "bg-primary/85 text-primary-foreground hover:bg-primary/95 border-primary/85",
-        soft: "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200",
-        ghost: "bg-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 border-transparent",
-        outline: "bg-card text-slate-700 hover:bg-slate-50 border border-slate-200",
+        solid: "bg-emerald-600 text-white border border-emerald-600 shadow-[0_1px_2px_rgba(6,78,59,0.18)] hover:bg-emerald-700 hover:border-emerald-700",
+        soft: "bg-card text-slate-700 hover:bg-workspace-hover border border-[var(--workspace-divider)]",
+        ghost: "bg-transparent text-slate-600 hover:bg-workspace-hover hover:text-slate-900 border-transparent",
+        outline: "bg-card text-slate-700 hover:bg-workspace-hover border border-[var(--workspace-divider)]",
         danger: "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-100",
       },
       size: {

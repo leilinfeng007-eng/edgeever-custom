@@ -161,6 +161,18 @@ const MCP_TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "get_inbox_classification",
+    description: "Read the automatic inbox classification state for one note: enabled, job status, outcome, attempts, failure reason, suggested destination and tags, canApply and canUndo. Read-only. Use it after creating or updating a note without an explicit notebook, or when filing failed; a pending or retained note stays in the inbox and must not be moved by guessing.",
+    inputSchema: {
+      type: "object",
+      required: ["memoId"],
+      additionalProperties: false,
+      properties: {
+        memoId: { type: "string", minLength: 1 },
+      },
+    },
+  },
+  {
     name: "search_memos",
     description: "Search active EdgeEver memos by text, tag, notebook, time range, pin state, resource presence, or poster type. Results retain their excerpt and add a snippet of up to 200 characters when the query or its terms can be located in the body. Snippets may omit surrounding conditions; read the memo when more context is needed. Use poster=true to find editable poster notes (海报笔记); do not search for the word 海报 to identify the type. query is optional. For recently created or added notes, pass createdAfter and omit query; do not put this week/最近/新增 in query. Time bounds accept YYYY-MM-DD or ISO date-time.",
     inputSchema: {
@@ -214,7 +226,7 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "create_memo",
-    description: "Save a completed prose note. Search for existing notes first. Read a clearly matching note and update it when adding material. If multiple notes might match, keep the new material in the inbox with autoClassify=false for review. For a new formatted note, call select_note_template, fill its structure, and pass templateId when provided. Omit notebookId unless the user chose a notebook. Stage files first, paste each returned Markdown snippet in its relevant section, and include its resourceId. Use References for note-wide original files. To save verbatim, keep the original text. For an editable poster, use create_poster_memo.",
+    description: "Save a completed prose note. Search for existing notes first. Read a clearly matching note and update it when adding material. An exact repeat with the same title and content is reused; identical content under a different title, or a matching title with different content, returns duplicate_match_found/duplicate_match_ambiguous. Read the returned candidates and update one instead of creating a copy, or pass allowDuplicate=true only when the user explicitly wants another copy. When no template is given, pass purpose so the server selects the matching template (falling back to the general AI conversation template); the user's templateId always wins. Fill only relevant sections, save the complete effective content, and omit empty sections and template instructions. Omit notebookId unless the user chose a notebook. Stage files first, paste each returned Markdown snippet in its relevant section, and include its resourceId; put whole-document reference files in a References section at the end. To save verbatim, keep the original text. For an editable poster, use create_poster_memo.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -222,7 +234,10 @@ const MCP_TOOL_DEFINITIONS = [
         notebookId: { type: "string", minLength: 1, description: "Explicit user-selected notebook. Omit to start in the workspace inbox." },
         autoClassify: { type: "boolean", description: "Defaults to true when no notebookId is supplied. Set false to keep in the inbox for review." },
         allowDuplicate: { type: "boolean", description: "Allow a separate copy when the user explicitly requests one." },
-        templateId: { type: "string", minLength: 1, description: "Workspace template used to prepare the completed prose." },
+        templateId: { type: "string", minLength: 1, description: "Explicit workspace template; takes priority over purpose." },
+        purpose: { type: "string", enum: noteTemplatePurposes, description: "Note purpose used to select a template when templateId is absent. Unknown purposes use the general AI conversation template." },
+        source: { type: "string", maxLength: 80, description: "Stable source identifier with sourceId, such as an agent or integration name; makes retries idempotent." },
+        sourceId: { type: "string", maxLength: 512, description: "Stable id from the source system; a repeat updates the original note instead of creating a copy." },
         requireResourcePlacement: { type: "boolean", description: "Set true when adding files to verify each resource appears in the submitted Markdown." },
         title: { type: "string" },
         contentMarkdown: { type: "string" },
@@ -565,7 +580,7 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "update_memo",
-    description: "Update an existing prose note in place with its original structure and attachment references. Read get_memo first and pass its expectedRevision. Add new material and file snippets in the relevant section. Unless the user chose a notebook, omit notebookId so changed prose can return to the inbox for classification. Set autoClassify=false to retain its current location. To edit a poster use get_poster then update_poster.",
+    description: "Update an existing prose note in place with its original structure and attachment references. Read get_memo first and pass its expectedRevision. Prefer sectionOperations to append to or replace one uniquely named section without touching other sections or their attachments; unreplaced text and referenced files are preserved. Pass contentMarkdown only for a full-body rewrite the user requested, and never re-apply a template automatically. Keep existing attachment snippets in place, add new file snippets in the relevant section, and put whole-document reference files in a References section at the end. A repeated request with no real change does not trigger classification again. Unless the user chose a notebook, omit notebookId so changed prose can return to the inbox for classification. Set autoClassify=false to retain its current location. To edit a poster use get_poster then update_poster.",
     inputSchema: {
       type: "object",
       required: ["memoId"],
@@ -575,11 +590,28 @@ const MCP_TOOL_DEFINITIONS = [
         title: { type: "string" },
         isPinned: { type: "boolean" },
         contentMarkdown: { type: "string" },
+        sectionOperations: {
+          type: "array",
+          minItems: 1,
+          maxItems: 20,
+          description: "Append to or replace uniquely named sections. Cannot be combined with contentMarkdown. A missing or duplicated heading returns a conflict and leaves the note unchanged.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["heading", "mode", "contentMarkdown"],
+            properties: {
+              heading: { type: "string", minLength: 1, maxLength: 200 },
+              mode: { type: "string", enum: ["append", "replace"] },
+              contentMarkdown: { type: "string" },
+            },
+          },
+        },
         tags: { type: "array", items: { type: "string" } },
         notebookId: { type: "string", minLength: 1, description: "Explicit user-selected destination." },
         autoClassify: { type: "boolean", description: "Defaults to true for prose content changes with no explicit notebook. Set false to keep the current location." },
         requireResourcePlacement: { type: "boolean", description: "Set true when adding files to verify each resource appears in the submitted Markdown." },
         allowAttachmentReferenceRemoval: { type: "boolean", description: "Set only if the user explicitly asks to remove a reference from the body." },
+        allowDuplicateAttachmentReferences: { type: "boolean", description: "Set only if the user explicitly wants the same existing file inserted again. Defaults to blocking duplicate references." },
         expectedRevision: { type: "integer", minimum: 0 },
         createdAt: { type: "string", format: "date-time" },
         updatedAt: { type: "string", format: "date-time" },
@@ -770,7 +802,7 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "read_memo_attachment",
-    description: "Read a file from an active memo directly through MCP. Get resourceId from list_memo_resources. Default content mode returns image data or extracts text from DOCX and UTF-8 text attachments. For text, pass nextOffset as offset to read the next part. Use mode=original to receive an embedded original file, including PDF or Excel, up to 2 MiB. Requires read:memos and read:resources.",
+    description: "Read a file from an active memo directly through MCP. Get resourceId from list_memo_resources. Default content mode returns image data or extracts text from DOCX, UTF-8 text, and text-layer PDF attachments. PDF text is paginated with pageStart/pageEnd/pageCount; pass nextOffset as offset to continue. Scanned PDFs without a text layer return pdf_no_text_layer and require OCR; encrypted, damaged, and oversized files return explicit errors. Never treat mode=original or an unreadable file as extracted text. Use mode=original only to receive an embedded original file up to 2 MiB. Requires read:memos and read:resources.",
     inputSchema: {
       type: "object",
       required: ["memoId", "resourceId"],
@@ -1136,6 +1168,7 @@ const MCP_TOOL_DEFINITIONS = [
 
 const READ_ONLY_MCP_TOOLS = new Set([
   "get_current_user",
+  "get_inbox_classification",
   "search_memos",
   "list_memos",
   "get_memo",

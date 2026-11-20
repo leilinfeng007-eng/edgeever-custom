@@ -8,11 +8,13 @@ import type { Bindings } from "../api-context";
 import { AppError } from "../common/app-error";
 import { resolveObjectStorage } from "../storage/object-storage";
 import { getResourceRow } from "./resource-service";
+import { extractPdfText, slicePdfPages } from "./pdf-text";
 
 const MIB = 1024 * 1024;
 const IMAGE_LIMIT = 2 * MIB;
 const ORIGINAL_LIMIT = 2 * MIB;
 const DOCX_LIMIT = 8 * MIB;
+const PDF_LIMIT = 16 * MIB;
 const WORD_XML_LIMIT = 2 * MIB;
 const TEXT_LIMIT = MIB;
 const PAGE_CHARACTERS = 12_000;
@@ -126,6 +128,7 @@ export async function readAttachmentContent(env: Bindings, workspaceId: string, 
   const attachment = { id: row.id, memoId, filename: row.filename, mimeType, byteSize: row.byte_size };
   const isDocx = mimeType === DOCX_MIME || (mimeType === "application/octet-stream" && /\.docx$/i.test(row.filename ?? ""));
   const isText = TEXT_TYPES.has(mimeType) || (mimeType === "application/octet-stream" && /\.(txt|md|csv|tsv|json)$/i.test(row.filename ?? ""));
+  const isPdf = mimeType === "application/pdf" || (mimeType === "application/octet-stream" && /\.pdf$/i.test(row.filename ?? ""));
   if (args.mode !== undefined && args.mode !== "content" && args.mode !== "original") {
     throw new AppError("invalid_params", "mode must be content or original.", 400);
   }
@@ -134,10 +137,10 @@ export async function readAttachmentContent(env: Bindings, workspaceId: string, 
   if (typeof offset !== "number" || !Number.isSafeInteger(offset) || offset < 0 || (offset && format !== "text")) {
     throw new AppError("invalid_params", "offset must be a non-negative integer and only applies to text.", 400);
   }
-  if (format === "text" && !isDocx && !isText) {
+  if (format === "text" && !isDocx && !isText && !isPdf) {
     throw new AppError("attachment_format_unsupported", "This format has no text extractor. Request mode=original to receive the file through MCP.", 422);
   }
-  const limit = format === "image" ? IMAGE_LIMIT : format === "original" ? ORIGINAL_LIMIT : isDocx ? DOCX_LIMIT : TEXT_LIMIT;
+  const limit = format === "image" ? IMAGE_LIMIT : format === "original" ? ORIGINAL_LIMIT : isDocx ? DOCX_LIMIT : isPdf ? PDF_LIMIT : TEXT_LIMIT;
   if (row.byte_size > limit) throw tooLarge(limit);
   const source = await resolveObjectStorage(env, row.storage_config_id);
   const object = await source.store.get(row.object_key);
@@ -149,6 +152,10 @@ export async function readAttachmentContent(env: Bindings, workspaceId: string, 
   }
   if (format === "original") {
     return { attachment, format: "original" as const, data: bytes };
+  }
+  if (isPdf) {
+    const extracted = await extractPdfText(bytes);
+    return { attachment, format: "text" as const, ...slicePdfPages(extracted.pages, offset, PAGE_CHARACTERS) };
   }
 
   let text: string;

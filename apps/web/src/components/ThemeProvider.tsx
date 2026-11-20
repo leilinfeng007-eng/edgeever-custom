@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { DIAGRAM_CANVAS_LIGHT } from "@edgeever/shared/diagram-canvas";
+import { DIAGRAM_CANVAS_DARK, DIAGRAM_CANVAS_LIGHT } from "@edgeever/shared/diagram-canvas";
 import {
   DEFAULT_CUSTOM_DARK_COLORS,
   DEFAULT_CUSTOM_EDITOR_THEME,
@@ -44,7 +44,7 @@ export const MERMAID_THEME_PALETTES: Record<MermaidThemeName, MermaidThemePalett
     border: "#d4d4d8",
   },
   "zinc-dark": {
-    bg: "#222325",
+    bg: DIAGRAM_CANVAS_DARK,
     fg: "#e4e5e7",
     line: "#85898f",
     accent: "#c4c7cb",

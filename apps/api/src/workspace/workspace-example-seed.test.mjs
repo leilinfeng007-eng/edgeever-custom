@@ -63,7 +63,7 @@ const exampleCounts = (sqlite, workspaceId = "ws_default") => Object.fromEntries
     `SELECT n.slug, COUNT(m.id) AS count
      FROM notebooks n
      LEFT JOIN memos m ON m.notebook_id = n.id AND m.is_deleted = 0
-     WHERE n.workspace_id = ? AND n.slug IN ('demo-features', 'feature-demos')
+     WHERE n.workspace_id = ? AND n.slug IN ('demo-features', 'demo-features-zh', 'feature-demos')
      GROUP BY n.slug
      ORDER BY n.slug`,
   ).all(workspaceId).map((row) => [row.slug, row.count]),
@@ -93,10 +93,14 @@ describe("workspace example seed", () => {
     await ensureWorkspaceExampleSeed(env, "ws_default");
 
     expect(pending(sqlite)).toEqual([]);
-    expect(exampleCounts(sqlite)).toEqual({ "demo-features": 7, "feature-demos": 7 });
+    expect(exampleCounts(sqlite)).toEqual({ "demo-features": 0, "demo-features-zh": 7, "feature-demos": 7 });
     expect(sqlite.query("SELECT id FROM memos WHERE id = 'memo_welcome'").get()).toEqual({ id: "memo_welcome" });
     expect(sqlite.query("SELECT parent_id FROM notebooks WHERE id = 'nb_demo_features'").get())
-      .toEqual({ parent_id: "nb_projects" });
+      .toEqual({ parent_id: null });
+    expect(sqlite.query("SELECT parent_id FROM notebooks WHERE slug = 'demo-features-zh'").get())
+      .toEqual({ parent_id: "nb_demo_features" });
+    expect(sqlite.query("SELECT parent_id FROM notebooks WHERE id = 'nb_demo_features_en'").get())
+      .toEqual({ parent_id: "nb_demo_features" });
     expect(overviewMarkdown(sqlite)).toContain("/api/v1/resources/res_demo_logo/blob");
     expect(overviewMarkdown(sqlite)).not.toContain("恢复 Demo 数据");
     expect(overviewMarkdown(sqlite, "memo_demo_overview_en")).not.toContain("Reset Demo Data");
@@ -116,7 +120,7 @@ describe("workspace example seed", () => {
     await ensureWorkspaceExampleSeed(env, "ws_default");
 
     expect(sqlite.query("SELECT title FROM memos WHERE id = 'memo_welcome'").get()).toEqual({ title: "Witaj w EdgeEver" });
-    expect(exampleCounts(sqlite)).toEqual({ "demo-features": 7, "feature-demos": 7 });
+    expect(exampleCounts(sqlite)).toEqual({ "demo-features": 0, "demo-features-zh": 7, "feature-demos": 7 });
   });
 
   test("does not backfill an installation that already has another note", async () => {
@@ -163,12 +167,12 @@ describe("workspace example seed", () => {
     await ensureWorkspaceExampleSeed(env, workspace.workspaceId);
 
     expect(pending(sqlite)).not.toContain(workspace.workspaceId);
-    expect(exampleCounts(sqlite, workspace.workspaceId)).toEqual({ "demo-features": 7, "feature-demos": 7 });
+    expect(exampleCounts(sqlite, workspace.workspaceId)).toEqual({ "demo-features": 0, "demo-features-zh": 7, "feature-demos": 7 });
     const notebook = sqlite.query(
       "SELECT id, parent_id FROM notebooks WHERE workspace_id = ? AND slug = 'demo-features'",
     ).get(workspace.workspaceId);
     expect(notebook.id).toBe(`${workspace.workspaceId}_nb_demo_features`);
-    expect(notebook.parent_id).toBe(`${workspace.workspaceId}_projects`);
+    expect(notebook.parent_id).toBeNull();
     const markdown = sqlite.query(
       `SELECT c.content_markdown
        FROM memo_contents c

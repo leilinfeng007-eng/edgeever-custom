@@ -1,4 +1,4 @@
-import { formatAttachmentMetadata } from "@edgeever/shared";
+import { formatAttachmentMetadata, getAttachmentFilenameFromLabel } from "@edgeever/shared";
 import {
   ChevronDown,
   ChevronLeft,
@@ -251,7 +251,7 @@ export const PdfViewer = ({
     <span
       ref={rootRef}
       className={cn(
-        "edgeever-pdf-viewer block overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm",
+        "edgeever-pdf-viewer block overflow-hidden rounded-lg border border-slate-200/90 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-300 dark:border-white/10 dark:hover:border-white/20",
         expanded ? "w-full" : COMPACT_ATTACHMENT_WIDTH_CLASS,
         isFullscreen && "fixed inset-0 z-[120] flex rounded-none border-0 bg-slate-950/95 p-3 sm:p-5",
         className,
@@ -261,7 +261,7 @@ export const PdfViewer = ({
       aria-label={isFullscreen ? t("pdfViewer.fullscreenLabel", { filename: label }) : undefined}
     >
       <span className={cn("flex min-w-0 flex-col", isFullscreen && "mx-auto h-full w-full max-w-6xl overflow-hidden rounded-xl bg-card shadow-2xl")}>
-        <span data-edgeever-resource-toolbar className="flex min-h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-card px-3">
+        <span data-edgeever-resource-toolbar className="flex min-h-[52px] shrink-0 items-center gap-2.5 overflow-x-auto border-b border-slate-200/80 bg-card px-3 py-2 dark:border-white/10">
           {isFullscreen && onPrevious ? (
             <ButtonTooltip title={t("pdfViewer.previous")}>
               <button type="button" className="pdf-viewer-action" aria-label={t("pdfViewer.previous")} onClick={onPrevious}>
@@ -283,10 +283,12 @@ export const PdfViewer = ({
             disabled={isFullscreen || !previewAllowed}
             onClick={() => setExpanded(!expanded)}
           >
-            <AttachmentFileIcon mimeType="application/pdf" filename={filename || label} className="h-5 w-5 shrink-0" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-white/5">
+              <AttachmentFileIcon mimeType="application/pdf" filename={filename || label} className="h-4 w-4" />
+            </span>
             <span className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-semibold text-slate-800">{label}</span>
-              <span className="truncate text-xs font-medium text-slate-500">
+              <span className="truncate text-[13px] font-semibold text-slate-900">{filename || getAttachmentFilenameFromLabel(label) || label}</span>
+              <span className="truncate text-[11px] font-medium text-slate-500">
                 {previewAllowed ? metadata : `${metadata} · ${t("pdfViewer.previewTooLarge")}`}
               </span>
             </span>

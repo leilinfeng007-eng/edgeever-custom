@@ -1,7 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
+import { WORKSPACE_SETTINGS_PATH } from "@/hooks/useWorkspaceRoute";
 import { ArrowUp, Download, FileText, Loader2, PanelRightClose, Plus, Sparkles, X } from "lucide-react";
 import type { CompanionAction, CompanionAnswer, CompanionEvent, CompanionFailureDiagnostics, CompanionTurn, CompanionTurnInput } from "@edgeever/shared";
 import { buildRevisionDiffRows, companionAdviceOnly, companionFailureDiagnostics, createMemoLinkHref } from "@edgeever/shared";
@@ -90,7 +93,7 @@ import { AiSidebarThreadMenu } from "./AiSidebarThreadMenu";
 import { InfographicSidebarSession, type InfographicSidebarController } from "./InfographicSidebarSession";
 import { memoIdFromSidebarLinkEvent } from "./sidebar-note-links";
 
-const SIDEBAR_DEFAULT_WIDTH = 380;
+const SIDEBAR_DEFAULT_WIDTH = 360;
 const sidebarThreadClassName = cn(
   "gap-3 p-3 text-[13px] leading-[1.6]",
   "[&_[data-streamdown=heading-1]]:mt-3 [&_[data-streamdown=heading-1]]:mb-1 [&_[data-streamdown=heading-1]]:text-[15px] [&_[data-streamdown=heading-1]]:leading-snug",
@@ -108,7 +111,7 @@ const sidebarThreadClassName = cn(
 const sidebarUserMessageClassName = "whitespace-pre-wrap break-words text-[13px] leading-5 group-[.is-user]:px-3 group-[.is-user]:py-2";
 const SIDEBAR_MIN_WIDTH = 320;
 const SIDEBAR_MAX_WIDTH = 560;
-const NARROW_QUERY = "(max-width: 767px)";
+const NARROW_QUERY = "(max-width: 1279px)";
 
 const SKILLS = [
   { id: "summarize", command: "/summarize" },
@@ -233,7 +236,15 @@ export const writeAiSidebarOpen = (open: boolean) => {
 };
 
 export const readAiSidebarWidth = () => {
-  const raw = readStorage(AI_SIDEBAR_WIDTH_KEY);
+  let raw = readStorage(AI_SIDEBAR_WIDTH_KEY);
+  const migrationKey = "edgeever.aiSidebar.widthDefaults.v2";
+  if (readStorage(migrationKey) !== "1") {
+    if (raw === "380") {
+      writeStorage(AI_SIDEBAR_WIDTH_KEY, String(SIDEBAR_DEFAULT_WIDTH));
+      raw = String(SIDEBAR_DEFAULT_WIDTH);
+    }
+    writeStorage(migrationKey, "1");
+  }
   if (!raw?.trim()) return SIDEBAR_DEFAULT_WIDTH;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? clampSidebarWidth(parsed) : SIDEBAR_DEFAULT_WIDTH;
@@ -705,7 +716,15 @@ function AiSidebarSession({
   onStopReady: RefObject<() => void>;
 }) {
   const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const [source, setSource] = useState<"builtin" | "local">(readAiSidebarSource);
+  const aiSettingsQuery = useQuery({
+    queryKey: ["ai-settings", locale],
+    queryFn: () => api.getAiSettings(locale),
+    staleTime: 30_000,
+  });
+  const modelMissing = source === "builtin" && !aiSettingsQuery.isPending && !aiSettingsQuery.isError
+    && !(aiSettingsQuery.data?.providers ?? []).some(provider => provider.models.length > 0);
   const [localAdapterId, setLocalAdapterId] = useState(() => readLocalAdapter()?.id ?? null);
   const [turns, setTurns] = useState<CompanionTurn[]>([]);
   const [actions, setActions] = useState<CompanionAction[]>([]);
@@ -1658,10 +1677,29 @@ function AiSidebarSession({
         <ConversationContent className={sidebarThreadClassName}>
           {loading && visibleCompanion ? <p role="status" className="text-sm text-slate-500">{t("common.loading")}</p> : null}
           {!loading && !visibleTurns.length && !currentDraft ? (
-            <ConversationEmptyState
-              icon={<Sparkles className="h-6 w-6" />}
-              title={t("aiAssistant.sidebar.emptyTitle")}
-            />
+            <ConversationEmptyState>
+              <div className="flex size-full flex-col items-center justify-center gap-3 p-8 text-center">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-slate-900 ">{t("aiAssistant.sidebar.emptyTitle")}</h3>
+                  {modelMissing ? (
+                    <p className="max-w-[18rem] text-xs leading-5 text-slate-500 dark:text-slate-400">
+                      {t("mobile.ai.modelNotConfigured")}
+                    </p>
+                  ) : null}
+                </div>
+                {modelMissing ? (
+                  <Link
+                    to={`${WORKSPACE_SETTINGS_PATH}?tab=ai`}
+                    className="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  >
+                    {t("settings.tabs.ai")}
+                  </Link>
+                ) : null}
+              </div>
+            </ConversationEmptyState>
           ) : null}
           {visibleCompanion ? threadTurns.map((turn, index) => (
             <Fragment key={turn.id}>

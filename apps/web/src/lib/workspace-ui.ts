@@ -1,4 +1,4 @@
-export const WORKSPACE_PAGE_TITLE_CLASSNAME = "text-sm font-semibold leading-5 text-slate-900";
+export const WORKSPACE_PAGE_TITLE_CLASSNAME = "text-[15px] font-semibold leading-5 text-slate-900";
 
 /** Status chip. Same cool wash as a highlighted menu row, without a neutral outline. */
 export const BETA_BADGE_CLASSNAME =
@@ -10,4 +10,4 @@ export const BETA_BADGE_CLASSNAME =
  * - EDITOR_CONTENT_MAX_WIDTH: Maximum width of the document editor content area (default: 880px)
  */
 export const EDITOR_OUTLINE_WIDTH = "300px";
-export const EDITOR_CONTENT_MAX_WIDTH = "880px";
+export const EDITOR_CONTENT_MAX_WIDTH = "860px";
