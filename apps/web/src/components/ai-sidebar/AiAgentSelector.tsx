@@ -176,14 +176,6 @@ export function AiAgentSelector({ source, adapterId, disabled, onPendingChange }
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {source !== "local" && !settings.isPending && !settings.isError && !providers.length ? (
-        <Link
-          to={`${WORKSPACE_SETTINGS_PATH}?tab=ai`}
-          className="max-w-full truncate px-2 text-[10.5px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
-        >
-          {t("settings.tabs.ai")} →
-        </Link>
-      ) : null}
     </div>
   );
 }

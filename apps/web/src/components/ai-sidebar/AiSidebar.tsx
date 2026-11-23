@@ -723,8 +723,10 @@ function AiSidebarSession({
     queryFn: () => api.getAiSettings(locale),
     staleTime: 30_000,
   });
+  const hasAvailableModel = (aiSettingsQuery.data?.providers ?? []).some(provider =>
+    provider.isEnabled && !provider.credentialsUnavailable && provider.models.length > 0);
   const modelMissing = source === "builtin" && !aiSettingsQuery.isPending && !aiSettingsQuery.isError
-    && !(aiSettingsQuery.data?.providers ?? []).some(provider => provider.models.length > 0);
+    && !hasAvailableModel;
   const [localAdapterId, setLocalAdapterId] = useState(() => readLocalAdapter()?.id ?? null);
   const [turns, setTurns] = useState<CompanionTurn[]>([]);
   const [actions, setActions] = useState<CompanionAction[]>([]);
@@ -1695,7 +1697,7 @@ function AiSidebarSession({
                     to={`${WORKSPACE_SETTINGS_PATH}?tab=ai`}
                     className="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   >
-                    {t("settings.tabs.ai")}
+                    {t("aiAssistant.agentSource.configure")}
                   </Link>
                 ) : null}
               </div>
