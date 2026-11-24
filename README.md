@@ -56,3 +56,5 @@ bun run typecheck:mobile
 bun run test
 bun run build:web
 ```
+
+<!-- Command Code GitHub 写入验证 -->
