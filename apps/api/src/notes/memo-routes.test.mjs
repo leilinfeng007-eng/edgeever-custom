@@ -16,7 +16,11 @@ const agentAuth = {
 
 const environment = {
   storage: {
-    db: {},
+    // The create route checks whether the destination is the inbox before it
+    // queues classification; this unit test delegates the write itself.
+    db: {
+      prepare: () => ({ bind: () => ({ first: async () => null }) }),
+    },
     resources: {},
   },
 };

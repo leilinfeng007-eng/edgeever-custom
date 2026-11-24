@@ -25,7 +25,9 @@ import { getActorLabel, getAuditActor, getWorkspaceId, requireScopes } from "../
 import { deleteReleasedResourceObjects } from "../attachments/resource-service";
 import type { DatabaseAdapter } from "../storage/storage-contract";
 import type { MemoMutationCommit } from "./memo-service";
-import { notebookClassificationChoice } from "../ai/inbox-classification";
+import { applyNoteSectionOperations } from "../mcp/mcp-note-sections";
+import { notebookClassificationChoice, requeueInboxClassification, kickInboxClassification, enqueueInboxClassification, canClassifyInbox } from "../ai/inbox-classification";
+import { inboxNotebookIdentitySql } from "./notebook-service";
 type MemoRouteDependencies = {
   clampNumber: (value: number, min: number, max: number) => number;
   createImageResource: (context: AppContext, input: {
@@ -175,6 +177,18 @@ export const registerMemoRoutes = (
         getAuditActor(context),
         getActorLabel(context),
       );
+      // An explicit destination stays put; only an inbox save is auto-filed.
+      // Web saves reach this route through the local mirror sync.
+      const inInbox = Boolean(await context.env.storage.db.prepare(
+        `SELECT 1 FROM notebooks WHERE id = ? AND workspace_id = ? AND is_deleted = 0
+           AND ${inboxNotebookIdentitySql("notebooks")}`,
+      ).bind(memo.notebookId, getWorkspaceId(context)).first());
+      if (inInbox && canClassifyInbox(context.env, getWorkspaceId(context))) {
+        await context.env.storage.db.batch(
+          enqueueInboxClassification(context.env, context.get("auth"), memo.notebookId, memo.id, true),
+        );
+        kickInboxClassification(context);
+      }
       return context.json({ memo }, 201);
     } catch (error) {
       return handleAppError(context, error);
@@ -353,19 +367,53 @@ export const registerMemoRoutes = (
   });
 
   const updateMemo = async (context: AppContext, memoId: string, input: MemoUpdateInput) => {
-    const previous = input.notebookId === undefined ? null
-      : await dependencies.getMemoDetail(context.env.storage.db, getWorkspaceId(context), memoId);
+    const auth = context.get("auth");
+    const previous = await dependencies.getMemoDetail(context.env.storage.db, getWorkspaceId(context), memoId);
+    // 章节编辑只给出标题，服务端在已存正文里定位并合并；正文整体替换与章节编辑互斥。
+    let patch = input;
+    if (input.sectionOperations?.length) {
+      if (input.contentMarkdown !== undefined || input.contentJson !== undefined) {
+        return apiError(context, "invalid_params", "Send either contentMarkdown/contentJson or sectionOperations, never both.", 400);
+      }
+      if (!previous) return notFound(context, "Memo not found");
+      let contentMarkdown: string;
+      try {
+        contentMarkdown = applyNoteSectionOperations(previous.contentMarkdown, input.sectionOperations);
+      } catch (error) {
+        return handleAppError(context, error);
+      }
+      // The section edit replaces the whole body with the merged result; every
+      // other part of the note (images, attachments, tables) is preserved
+      // because only the addressed section is rewritten.
+      patch = { ...input, contentMarkdown };
+    }
+    const movedNotebook = patch.notebookId !== undefined && previous?.notebookId !== patch.notebookId;
+    // Edits to an inbox note must be re-analyzed, matching the MCP update path.
+    // A manual move or explicit destination keeps the user's choice (see
+    // notebookClassificationChoice), so this only queues for an in-place edit.
+    // No-op saves (same body and metadata) must not reset a settled job, which
+    // would otherwise re-run the model on every redundant autosave.
+    const contentTouched = patch.contentMarkdown !== undefined
+      ? patch.contentMarkdown !== previous?.contentMarkdown
+      : patch.contentJson !== undefined;
+    const metaTouched = previous !== null
+      && ((patch.title !== undefined && patch.title !== previous.title)
+        || (patch.tags !== undefined && JSON.stringify(patch.tags) !== JSON.stringify(previous.tags)));
+    const editedInPlace = !movedNotebook && patch.notebookId === undefined && (contentTouched || metaTouched);
+    const inboxWork = movedNotebook
+      ? () => notebookClassificationChoice(context.env, auth, [memoId], patch.notebookId!)
+      : editedInPlace && previous
+        ? () => requeueInboxClassification(context.env, auth, previous.notebookId, memoId)
+        : null;
     const result = await dependencies.updateMemo(
       context.env.storage.db,
       getWorkspaceId(context),
       memoId,
-      input,
+      patch,
       getAuditActor(context),
       getActorLabel(context),
       true,
-      input.notebookId === undefined || previous?.notebookId === input.notebookId ? undefined : {
-        before: [], after: () => notebookClassificationChoice(context.env, context.get("auth"), [memoId], input.notebookId!),
-      },
+      inboxWork ? { before: [], after: inboxWork } : undefined,
     );
     if ("error" in result) {
       return context.json(
@@ -382,6 +430,9 @@ export const registerMemoRoutes = (
     if (result.releasedResources?.length) {
       await deleteReleasedResourceObjects(context.env, result.releasedResources);
     }
+    // Only an in-place re-file is worth waking the queue; a manual move must
+    // keep the user's destination and never trigger a model call.
+    if (editedInPlace && result.memo.notebookId === previous?.notebookId) kickInboxClassification(context);
     return context.json({ memo: result.memo });
   };
 

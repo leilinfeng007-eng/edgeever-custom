@@ -155,4 +155,40 @@ describe("MCP tool catalog", () => {
     expect(byName.get("search_memos")?.inputSchema.properties.createdAfter.format).toBeUndefined();
     expect(byName.get("search_memos")?.description).toContain("createdAfter");
   });
+
+  test("describes the conversation, section and attachment workflows", () => {
+    const byName = new Map(MCP_TOOLS.map((tool) => [tool.name, tool]));
+
+    // 归属默认行为写进描述，客户端无需靠猜测。
+    expect(byName.get("update_memo")?.description).toContain("stays in the note's current notebook");
+    expect(byName.get("update_memo")?.description).toContain("autoClassify=true");
+    expect(byName.get("update_memo")?.inputSchema.properties.autoClassify.description)
+      .toContain("works even when automatic classification is off");
+    expect(byName.get("create_memo")?.inputSchema.properties.notebookId.description).toContain("等待分类");
+
+    // 保存对话：模板、补充、同题合并、另存、重新分类。
+    const conversation = byName.get("save_ai_conversation");
+    expect(conversation?.inputSchema.properties.duplicate.enum).toEqual(["ask", "supplement", "merge", "new"]);
+    expect(conversation?.description).toContain("AI 对话通用模板");
+    expect(conversation?.description).toContain("AI沉淀");
+    expect(conversation?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(byName.get("update_memo")?.description).toContain("sectionOperations");
+
+    // 附件：来源、插入、汇总。
+    expect(byName.get("set_attachment_source")?.inputSchema.properties.source.type).toEqual(["object", "null"]);
+    expect(byName.get("set_attachment_source")?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
+    expect(byName.get("update_attachment_summary")?.inputSchema.required).toEqual(["memoId", "expectedRevision"]);
+    expect(byName.get("update_attachment_summary")?.annotations).toMatchObject({ destructiveHint: false, idempotentHint: true });
+    expect(byName.get("insert_memo_resource")?.inputSchema.properties.anchor.properties)
+      .toMatchObject({ section: expect.any(Object), afterText: expect.any(Object), beforeText: expect.any(Object) });
+    expect(byName.get("upload_memo_attachment")?.inputSchema.properties.source.properties.page.minimum).toBe(1);
+
+    expect(() => assertOpenAiCompatibleToolSchema(conversation.inputSchema, "save_ai_conversation")).not.toThrow();
+    expect(() => assertOpenAiCompatibleToolSchema(
+      byName.get("set_attachment_source").inputSchema, "set_attachment_source",
+    )).not.toThrow();
+    expect(() => assertOpenAiCompatibleToolSchema(
+      byName.get("insert_memo_resource").inputSchema, "insert_memo_resource",
+    )).not.toThrow();
+  });
 });

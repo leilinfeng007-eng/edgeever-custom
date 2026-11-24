@@ -4,7 +4,9 @@ import {
   MAX_IMAGE_UPLOAD_BYTES,
   contentDispositionAttachment,
   inferImageExtension,
+  mapResource,
   mapResourceListItem,
+  mergeAttachmentSourceMetadata,
   normalizeFilename,
   replaceResourceContent,
   validateAttachmentUpload,
@@ -48,10 +50,44 @@ describe("resource service contracts", () => {
       createdAt: "2026-08-08T00:00:00.000Z",
       updatedAt: "2026-08-08T01:00:00.000Z",
       url: "/api/v1/resources/res_1/blob",
+      source: null,
       memoTitle: "Architecture",
       memoExcerpt: "System overview",
       memoDeleted: false,
     });
+  });
+
+  test("reads the attachment source from metadata.origin only", () => {
+    expect(mapResource({
+      ...resourceRow,
+      metadata_json: JSON.stringify({ source: "upload", origin: { filename: "report.pdf", page: 3, pageEnd: 5 } }),
+    }).source).toEqual({ filename: "report.pdf", page: 3, pageEnd: 5 });
+
+    // 既有的 metadata.source 字符串不是来源对象。
+    expect(mapResource({ ...resourceRow, metadata_json: JSON.stringify({ source: "upload" }) }).source).toBeNull();
+    expect(mapResource({ ...resourceRow, metadata_json: "{" }).source).toBeNull();
+    expect(mapResource(resourceRow).source).toBeNull();
+  });
+
+  test("merges origin into existing metadata without dropping other keys", () => {
+    const merged = JSON.parse(mergeAttachmentSourceMetadata(
+      JSON.stringify({ source: "upload", originalFilename: "cat.jpg" }),
+      { filename: "cat.jpg", chapter: "实验" },
+    ));
+
+    expect(merged).toEqual({
+      source: "upload",
+      originalFilename: "cat.jpg",
+      origin: { filename: "cat.jpg", chapter: "实验" },
+    });
+
+    // null 表示清除来源，其他 metadata 保留。
+    expect(JSON.parse(mergeAttachmentSourceMetadata(
+      JSON.stringify({ source: "upload", origin: { filename: "cat.jpg" } }),
+      null,
+    ))).toEqual({ source: "upload" });
+    // 空对象规范化后为空 → 视为清除。
+    expect(JSON.parse(mergeAttachmentSourceMetadata(null, {}))).toEqual({});
   });
 
   test("normalizes filenames and keeps UTF-8 download names", () => {

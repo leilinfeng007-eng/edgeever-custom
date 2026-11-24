@@ -140,6 +140,149 @@ describe("resource route contracts", () => {
     expect(await response.json()).toMatchObject({ resource: { id: "res_1" } });
   });
 
+  test("persists an optional attachment source from the multipart upload", async () => {
+    let uploaded = null;
+    const form = new FormData();
+    form.append("file", new File(["content"], "report.pdf", { type: "application/pdf" }));
+    form.append("source", JSON.stringify({ filename: "report.pdf", page: 3, pageEnd: 5 }));
+    const response = await createApp(
+      { ...agentAuth, scopes: ["write:memos"] },
+      async () => null,
+      {
+        getMemoDetail: async () => ({ id: "memo_1" }),
+        createAttachmentResource: async (_context, input) => {
+          uploaded = input;
+          return { id: "res_1" };
+        },
+      },
+    ).request(
+      "/api/v1/memos/memo_1/resources",
+      { method: "POST", body: form },
+      createEnvironment(),
+    );
+
+    expect(response.status).toBe(201);
+    expect(uploaded.origin).toEqual({ filename: "report.pdf", page: 3, pageEnd: 5 });
+  });
+
+  test("keeps uploads without a source free of an origin field", async () => {
+    let uploaded = null;
+    const form = new FormData();
+    form.append("file", new File(["content"], "report.pdf", { type: "application/pdf" }));
+    await createApp(
+      { ...agentAuth, scopes: ["write:memos"] },
+      async () => null,
+      {
+        getMemoDetail: async () => ({ id: "memo_1" }),
+        createAttachmentResource: async (_context, input) => {
+          uploaded = input;
+          return { id: "res_1" };
+        },
+      },
+    ).request(
+      "/api/v1/memos/memo_1/resources",
+      { method: "POST", body: form },
+      createEnvironment(),
+    );
+
+    expect(uploaded && "origin" in uploaded).toBe(false);
+  });
+
+  test("rejects a malformed attachment source before anything is stored", async () => {
+    for (const raw of ["not json", JSON.stringify({ page: 0 }), JSON.stringify({}), JSON.stringify(["report.pdf"])]) {
+      let uploads = 0;
+      const form = new FormData();
+      form.append("file", new File(["content"], "report.pdf", { type: "application/pdf" }));
+      form.append("source", raw);
+      const response = await createApp(
+        { ...agentAuth, scopes: ["write:memos"] },
+        async () => null,
+        {
+          getMemoDetail: async () => ({ id: "memo_1" }),
+          createAttachmentResource: async () => {
+            uploads += 1;
+            return { id: "res_1" };
+          },
+        },
+      ).request(
+        "/api/v1/memos/memo_1/resources",
+        { method: "POST", body: form },
+        createEnvironment(),
+      );
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: "invalid_attachment_source" } });
+      expect(uploads).toBe(0);
+    }
+  });
+
+  test("updates the resource source through PATCH while keeping the rename flow", async () => {
+    const statements = [];
+    const environment = createEnvironment();
+    environment.storage.db.prepare = (sql) => ({
+      bind: (...values) => {
+        statements.push({ sql, values });
+        return {
+          all: async () => ({ results: [] }),
+          first: async () => ({ ...resourceRow, metadata_json: JSON.stringify({ source: "upload" }) }),
+          run: async () => ({ success: true, results: [], meta: {} }),
+        };
+      },
+      first: async () => null,
+    });
+    const response = await createApp(
+      { ...agentAuth, scopes: ["write:resources"] },
+      async () => ({ ...resourceRow, metadata_json: JSON.stringify({ source: "upload" }) }),
+    ).request(
+      "/api/v1/resources/res_1",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: "report.pdf", source: { filename: "report.pdf", page: 2 } }),
+      },
+      environment,
+    );
+
+    expect(response.status).toBe(200);
+    const update = statements.find((statement) => statement.sql.includes("metadata_json"));
+    expect(update).toBeDefined();
+    expect(JSON.parse(update.values[1])).toEqual({
+      source: "upload",
+      origin: { filename: "report.pdf", page: 2 },
+    });
+
+    const audit = statements.find((statement) => Array.isArray(statement.values)
+      && statement.values.includes("resource.source.update"));
+    expect(audit).toBeDefined();
+  });
+
+  test("rejects an invalid source on PATCH without writing metadata", async () => {
+    const statements = [];
+    const environment = createEnvironment();
+    environment.storage.db.prepare = (sql) => ({
+      bind: (...values) => {
+        statements.push({ sql, values });
+        return { all: async () => ({ results: [] }), first: async () => null, run: async () => ({}) };
+      },
+      first: async () => null,
+    });
+    const response = await createApp(
+      { ...agentAuth, scopes: ["write:resources"] },
+      async () => ({ ...resourceRow, metadata_json: JSON.stringify({ source: "upload" }) }),
+    ).request(
+      "/api/v1/resources/res_1",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: "report.pdf", source: { page: 0 } }),
+      },
+      environment,
+    );
+
+    expect(response.status).toBe(400);
+    expect(statements.some((statement) => statement.sql.includes("UPDATE resources"))).toBe(false);
+  });
+
   test("replaces resource content with an explicit optimistic-concurrency baseline", async () => {
     let replacement;
     const form = new FormData();

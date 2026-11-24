@@ -41,6 +41,7 @@ import {
   putLocalMemoUpdate,
   restoreLocalMemo,
   syncLocalMirror,
+  isLocalMemoId,
   type LocalMemoListParams,
   type LocalMemoListResponse,
 } from "@/lib/local-mirror";
@@ -70,6 +71,10 @@ export type EdgeEverRepository = {
   readResource(resourceId: string): Promise<Blob>;
   updateResource(resourceId: string, file: File, expectedContentHash: string): Promise<{ resource: Resource }>;
   listResources(): Promise<{ resources: ResourceListItem[]; summary: ResourceStorageSummary }>;
+  /**
+   * 重算笔记正文里的「附件汇总」章节。桌面壳暂未实现（可选，调用方会回落到 HTTP 客户端）。
+   */
+  updateAttachmentSummary?(memoId: string, input: { expectedRevision: number; expectedContentHash?: string }): Promise<{ memo: MemoDetail; total: number; changed: boolean }>;
   renameResource(resourceId: string, filename: string): Promise<{ resource: Resource }>;
   deleteResource(resourceId: string): Promise<{ ok: true }>;
   listTags(): Promise<{ tags: TagSummary[] }>;
@@ -396,6 +401,15 @@ export const createWebRepository = (scope: string): EdgeEverRepository => {
     }
     const result = await api.renameResource(resourceId, filename);
     await renameLocalResource(scope, resourceId, result.resource.filename || filename);
+    return result;
+  },
+  async updateAttachmentSummary(memoId, input) {
+    if (isOffline() || isLocalMemoId(memoId)) {
+      throw new Error("Attachment summaries can only be rebuilt after the note is synced.");
+    }
+    const result = await api.updateAttachmentSummary(memoId, input);
+    // 汇总可能改写了正文；把最新快照写回本地镜像，离线打开时也一致。
+    await putLocalMemo(scope, result.memo);
     return result;
   },
   async deleteResource(resourceId) {

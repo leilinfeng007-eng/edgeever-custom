@@ -3016,6 +3016,21 @@ export const fr = {
       deleteDescription: "La pièce jointe sera définitivement supprimée du stockage et de cette note. Cette action est irréversible.",
       failed: "L'action sur la pièce jointe a échoué. Réessayez."
     },
+    attachmentSource: {
+      add: "Ajouter la source",
+      edit: "Modifier la source",
+      dialogTitle: "Source de la pièce jointe",
+      dialogDescription: "Indiquez le fichier source, la page, le chapitre, la feuille ou la plage. Laissez vides les informations inconnues ; rien n'est deviné.",
+      placeholder: "ex. rapport.pdf · P.3-5 · Chapitre : Exigences",
+      confirm: "Enregistrer la source",
+    },
+    attachmentSummary: {
+      action: "Mettre à jour le récapitulatif des pièces jointes",
+      updated: "Récapitulatif des pièces jointes mis à jour ({{count}}).",
+      unchanged: "Le récapitulatif des pièces jointes est déjà à jour ({{count}}).",
+      empty: "Cette note n'a aucune pièce jointe à récapituler.",
+      failed: "Impossible de mettre à jour le récapitulatif : {{message}}",
+    },
     placeholder: "espace pour l'IA · commandes / · notes @",
     placeholderCommands: "commandes / · notes @",
     noteBodyAria: "Corps de la note",

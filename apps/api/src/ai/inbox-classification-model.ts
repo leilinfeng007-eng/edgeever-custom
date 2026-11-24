@@ -16,6 +16,43 @@ export type ClassifierInput = {
 const codes = ["model_empty_output", "model_truncated", "model_json_invalid", "model_fields_invalid"] as const;
 export const isModelOutputError = (code: string) => codes.some((candidate) => candidate === code);
 
+// Diagnostics stay aggregate-only: never the note text, prompt, key, or body.
+const describeFailure = (stage: string, error: unknown, startedAt: number) => {
+  const record = error as {
+    name?: unknown; code?: unknown; statusCode?: unknown; message?: unknown;
+    stack?: unknown; cause?: unknown;
+  } | null;
+  const name = typeof record?.name === "string" ? record.name : typeof error;
+  // A runtime TypeError/ReferenceError is raised by platform or SDK code, not by
+  // provider output, so its message, stack and cause cannot echo note text.
+  const runtime = name === "TypeError" || name === "ReferenceError";
+  const cause = record?.cause as { name?: unknown; message?: unknown } | undefined;
+  console.error("[inbox-classification] model failure", JSON.stringify({
+    stage,
+    name,
+    code: typeof record?.code === "string" ? record.code : undefined,
+    status: typeof record?.statusCode === "number" ? record.statusCode : undefined,
+    ms: Date.now() - startedAt,
+    ...(runtime && typeof record?.message === "string" ? { message: record.message.slice(0, 200) } : {}),
+    ...(runtime && typeof record?.stack === "string"
+      ? { stack: record.stack.split("\n").slice(0, 6).map((line) => line.trim().slice(0, 160)) }
+      : {}),
+    ...(runtime && cause ? {
+      causeName: typeof cause.name === "string" ? cause.name : undefined,
+      causeMessage: typeof cause.message === "string" ? cause.message.slice(0, 200) : undefined,
+    } : {}),
+  }));
+};
+
+const describeOutput = (stage: string, finishReason: string, text: string) => {
+  console.error("[inbox-classification] model output rejected", JSON.stringify({
+    stage,
+    finishReason,
+    empty: text.trim().length === 0,
+    length: text.length,
+  }));
+};
+
 const decisionSchema = z.object({
   choice: z.number().int().nonnegative(),
   review: z.boolean(),
@@ -72,23 +109,50 @@ function validateDecision(value: unknown, size: number) {
   return parsed.data;
 }
 
+/**
+ * Guarded fetch shared by the primary and fallback classifier requests: the
+ * model object is built once, so both paths inherit this behavior.
+ *
+ * workerd rejects redirect: "error" (only follow/manual are supported). Using
+ * manual and rejecting 3xx ourselves preserves the original intent — a redirect
+ * must never be followed to another origin while carrying the model key.
+ */
+export const createGuardedClassifierFetch = (
+  config: { provider: string; baseUrl: string },
+  fetchImpl: typeof fetch = (...args) => fetch(...args),
+) => async (input: RequestInfo | URL, init?: RequestInit) => {
+  const request = new Request(input, init);
+  if (!isConfiguredAiEndpoint(new URL(request.url), request.method, {
+    provider: config.provider,
+    base_url: config.baseUrl,
+  })) {
+    throw new AppError("ai_classification_target_denied", "Unexpected classifier model endpoint.", 400);
+  }
+  const response = await fetchImpl(request, { redirect: "manual" });
+  if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
+    throw new AppError("ai_classification_target_denied", "Classifier model endpoint redirected unexpectedly.", 400);
+  }
+  return response;
+};
+
 export const classifyWithDefaultModel = (env: Bindings) => async ({
   workspaceId, note, destinations, signal,
 }: ClassifierInput) => {
   const credentials = await loadDefaultAiModelCredentials(env.storage.db, workspaceId, env);
-  const model = createClientAiModel({
-    ...credentials,
-    fetch: (input, init) => {
-      const request = new Request(input, init);
-      if (!isConfiguredAiEndpoint(new URL(request.url), request.method, {
+  const setupStartedAt = Date.now();
+  let model: ReturnType<typeof createClientAiModel>;
+  try {
+    model = createClientAiModel({
+      ...credentials,
+      fetch: createGuardedClassifierFetch({
         provider: credentials.provider,
-        base_url: credentials.baseUrl,
-      })) {
-        throw new AppError("ai_classification_target_denied", "Unexpected classifier model endpoint.", 400);
-      }
-      return fetch(request, { redirect: "error" });
-    },
-  });
+        baseUrl: credentials.baseUrl,
+      }),
+    });
+  } catch (error) {
+    describeFailure("setup", error, setupStartedAt);
+    throw error;
+  }
   const base = {
     model, maxOutputTokens: 1200, maxRetries: 0,
     abortSignal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
@@ -98,6 +162,7 @@ export const classifyWithDefaultModel = (env: Bindings) => async ({
     }),
   };
   let decision: z.infer<typeof decisionSchema>;
+  const primaryStartedAt = Date.now();
   try {
     if (credentials.provider === "google" || credentials.provider === "anthropic") {
       const result = await generateText({ ...base, system: instructions, output: Output.object({ schema: decisionSchema }) });
@@ -106,20 +171,35 @@ export const classifyWithDefaultModel = (env: Bindings) => async ({
       const result = await generateText({ ...base, system: instructions +
         ' Return only one JSON object: {"choice": number, "review": boolean, "reason": string, "tags": string[]}.',
       });
-      decision = parseResponse(result.text, result.finishReason, destinations.length, false);
+      try {
+        decision = parseResponse(result.text, result.finishReason, destinations.length, false);
+      } catch (parseError) {
+        describeOutput("primary", result.finishReason, result.text ?? "");
+        throw parseError;
+      }
     }
   // SDK 自动重试已关闭；仅结构化输出错误或供应商 400/422 才补一次兼容请求。
   // 超时、鉴权或网络异常不会走此分支；每次请求 30 秒，外层任务的 65 秒信号仍可终止 fallback。
   } catch (error) {
     if (signal.aborted) throw error;
+    describeFailure("primary", error, primaryStartedAt);
     const outputError = error instanceof Error && ["AI_NoObjectGeneratedError", "AI_NoOutputGeneratedError"].includes(error.name);
     const providerError = error instanceof Error && "statusCode" in error ? error.statusCode : undefined;
     if (!(outputError || providerError === 400 || providerError === 422 || (error instanceof AppError && isModelOutputError(error.code)))) throw error;
+    const fallbackStartedAt = Date.now();
     const fallback = await generateText({ ...base, maxOutputTokens: 1600,
       abortSignal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
       system: instructions + " Return three lines: MOVE <number> or REVIEW <number>, the reason, and comma-separated tags (optional). No Markdown.",
+    }).catch((fallbackError) => {
+      describeFailure("fallback", fallbackError, fallbackStartedAt);
+      throw fallbackError;
     });
-    decision = parseResponse(fallback.text, fallback.finishReason, destinations.length, true);
+    try {
+      decision = parseResponse(fallback.text, fallback.finishReason, destinations.length, true);
+    } catch (parseError) {
+      describeOutput("fallback", fallback.finishReason, fallback.text ?? "");
+      throw parseError;
+    }
   }
   const { choice, reason, review, tags } = decision;
   return { notebookId: destinations[choice - 1]?.id ?? null, reason, review, tags: cleanTags(tags) };

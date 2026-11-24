@@ -282,12 +282,18 @@ export const handleMcpMessage = async (
       // 执行失败仍是 HTTP 200 的工具结果，isError 和 structuredContent.error 才是业务失败信号。
       // 协议/认证失败在调用前单独返回 JSON-RPC error，客户端不能只按 HTTP 状态判断成功。
       const mapped = mapMcpToolError(error);
+      const data = mapped.data as Record<string, unknown> | undefined;
+      const code = typeof data?.code === "string" ? data.code : "tool_error";
+      // 业务详情（候选、可选章节、当前版本）必须随错误一起返回，
+      // 客户端才能让用户区分「候选待选」「版本冲突」「目标不唯一」。
+      const { code: _code, ...details } = data ?? {};
       const toolResult = {
         content: [{ type: "text", text: mapped.message }],
         structuredContent: {
           error: {
-            code: (mapped.data as { code?: string } | undefined)?.code ?? "tool_error",
+            code,
             message: mapped.message,
+            ...details,
           },
         },
         isError: true,

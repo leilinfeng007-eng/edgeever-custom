@@ -231,6 +231,13 @@ export type MemoResponse = {
   memo: MemoDetail;
 };
 
+/** 「附件汇总」重算结果：`total` 是汇总到的附件数，`changed` 表示正文是否被改写。 */
+export type AttachmentSummaryResponse = {
+  memo: MemoDetail;
+  total: number;
+  changed: boolean;
+};
+
 export type ListTemplatesResponse = {
   templates: MemoTemplate[];
 };
@@ -1718,6 +1725,16 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       }),
 
     listResources: () => request<ListResourcesResponse>("/api/v1/resources"),
+
+    /**
+     * 重算正文里的「附件汇总」章节。`expectedRevision`/`expectedContentHash`
+     * 是乐观并发基线：笔记已变时返回 409，不覆盖别人的编辑。
+     */
+    updateAttachmentSummary: (memoId: string, input: { expectedRevision: number; expectedContentHash?: string }) =>
+      request<AttachmentSummaryResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}/attachment-summary`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
 
     renameResource: (resourceId: string, filename: string) =>
       request<ResourceResponse>(`/api/v1/resources/${encodeURIComponent(resourceId)}`, {

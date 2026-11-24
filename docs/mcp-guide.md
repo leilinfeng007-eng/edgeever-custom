@@ -83,14 +83,50 @@ Keyword searches with `search_memos` also return a `snippet` of up to 200 charac
 
 ## 3. Save an AI conversation as a prose note
 
-1. Search for the topic or a stable identifier. When the match is clear, read the existing note and update its relevant section using `expectedRevision`. Keep its structure and existing file references. When several notes could match, save the new material in the inbox with `autoClassify: false` for review.
+1. Search for the topic or a stable identifier. When the match is clear, read the existing note and update its relevant section using `expectedRevision`. Keep its structure and existing file references. When the user names one exact target note, call `save_ai_conversation` with `memoId` and `duplicate: "supplement"`. When several notes share the name, ask the user first. When candidates exist but this is not a same-topic merge, you can save the new material in the inbox for review.
 2. For a new formatted note, call `select_note_template` with its purpose. Supported purposes are `issue`, `meeting`, `progress`, `reading`, `idea`, `goals`, `general`, and `verbatim`. Give the user's chosen `templateId` if specified. Mixed-purpose notes use the workspace's general AI conversation template when present. Write the final Markdown and include the chosen template ID in `create_memo` to apply its title fallback and tags. Keep verbatim text as supplied.
 3. Stage each file before writing. Put images next to the paragraph they illustrate, and document links in the sections that cite them. Use a final **References** section for files that apply to the whole note, and reuse the same resource ID for later citations. Pass `requireResourcePlacement: true` to check that each new resource is referenced.
-4. Supply `notebookId` when the user explicitly chooses a notebook. Otherwise, new notes enter the inbox and substantive edits to existing prose notes can return there for classification. Exact matches without attachments can return the existing note. Use `allowDuplicate: true` when a separate copy was requested.
+4. Supply `notebookId` when the user explicitly chooses a notebook; the explicit notebook always wins. Otherwise new notes enter 等待分类 (the inbox). Exact matches without attachments can return the existing note. Use `allowDuplicate: true` when a separate copy was requested.
 
-On Docker and other Bun self-hosted deployments, the background classifier uses EdgeEver's default model. It uses the note title, body, tags and attachment names, and chooses an existing notebook. Unclear notes and model failures stay in the inbox. The inbox UI shows classification status and lets users retry. Set `EDGE_EVER_AUTO_CLASSIFY=false` in the service environment to turn off automatic classification, or set `EDGE_EVER_AUTO_CLASSIFY_WORKSPACE` to limit it to one workspace.
+### 3.1 Where a note lives (create / update / restore)
 
-## 4. Attach local files
+- **Create**: an explicit `notebookId` saves straight into that notebook; without one the note starts in 等待分类. `autoClassify` only decides whether an inbox note is queued; it never overrides an explicit destination.
+- **Update**: a normal edit **stays in the current notebook**; callers no longer need `autoClassify: false` to keep the note in place. Pass `notebookId` to move it (explicit target wins), or `autoClassify: true` to move it back to 等待分类 for re-classification.
+- **Move and queue are separate**: moving into 等待分类 and starting classification are different things. With `EDGE_EVER_AUTO_CLASSIFY=false` a note can still be moved into 等待分类; no classification job is created.
+- **Restore**: a trashed note returns to its original notebook; only when that notebook was deleted does it return to 等待分类.
+
+### 3.2 Saving a conversation (`save_ai_conversation`)
+
+Use `save_ai_conversation` for deliberate conversation capture instead of the generic `create_memo`. It reuses the AI conversation template's four sections (结论, 关键步骤 / 依据, 验证结果, 来源 / 链接), the 「对象｜主题」 title, and the `AI沉淀` tag.
+
+| Case | Call |
+|---|---|
+| Save as a new note | `{"message":"…","response":"…","object":"Release plan"}` → starts in 等待分类 |
+| Supplement a named note in place | add `memoId` + `expectedRevision` + `duplicate:"supplement"`, optional `section:{heading,mode}` |
+| Same-topic merge | add `memoId` + `duplicate:"merge"`: supplement, then move to 等待分类 (move only when classification is off) |
+| Save separately | after candidates are returned, pass `duplicate:"new"` |
+| Re-classify | `autoClassify:true` on a plain update, or `duplicate:"merge"` when saving a conversation |
+
+When the title already exists, the call returns `duplicate_match_found` and `error.candidates` with `memoId`, `title`, `notebookId` and `excerpt` — a short body passage taken from the same summary the note list uses — so the client can offer 「补充已有」 or 「另存新笔记」. Candidates are a read-only result: nothing is written until the user picks one.
+
+## 4. Section updates and concurrency
+
+- Prefer `update_memo` with `sectionOperations`: `append` adds to that section, `replace` rewrites only it, and all other text and attachment references stay intact. Never rewrite the whole note to change one place.
+- A missing heading returns `section_not_found`; a duplicated heading returns `section_ambiguous`. Both include `availableHeadings` and leave the note unchanged; retarget the section rather than falling back to a full rewrite.
+- Pass `expectedRevision` for optimistic concurrency. A conflict returns `revision_conflict` with `currentRevision`, `notebookId` and `title`; read the note again before retrying.
+- Appends and supplements accept an optional `idempotencyKey`: a timed-out retry of the same request applies once. To deliberately append identical text later, use a different key or omit it.
+
+## 5. Attachments: source, insertion and summary
+
+The full flow is upload → insert at a chosen place → set or change the source → update the summary → read back to confirm:
+
+1. Upload with `upload_memo_attachment` (≤2 MiB, optional `source`), `stage_memo_resource`, or `create_resource_upload_url`.
+2. Insert with `insert_memo_resource` by unique section (`anchor:{section,position}`) or unique body text (`afterText` / `beforeText`). A failed lookup returns `section_not_found` / `section_ambiguous` / `anchor_not_found` and never falls back to the end of the note.
+3. Set or change the source with `set_attachment_source`, reusing the shared format (`filename · P.3-5 · 章节：X · 工作表：X · 范围：A1:C9 · url · 说明：X`); page ranges, chapters, worksheets and ranges are supported, and `source: null` clears it.
+4. Update 附件汇总 with `update_attachment_summary` (pass `expectedRevision`). Attachment cards stay in the body; each attachment appears once at the end with one link and its latest source, and repeat calls are idempotent.
+5. Read back with `get_memo` / `list_memo_resources` to confirm the body and sources.
+
+## 6. Attach local files
 
 Use `stage_memo_resource` to send an original local image or file up to 2 MiB directly through MCP. Pass `kind`, `filename`, `mimeType`, and `dataBase64`. The response includes a pending `resourceId` and the Markdown snippet. For larger files, or if the client can only supply a local path, use a one-time upload URL:
 
@@ -100,7 +136,9 @@ Use `stage_memo_resource` to send an original local image or file up to 2 MiB di
 
 Each URL accepts one file of exactly the declared size and type, up to 100 MiB, for 15 minutes. A request with the wrong size or type is rejected without using up the URL, and repeating a successful upload returns the same `resourceId`. The URL also stops working when the token that created it is revoked or loses `write:resources`. An uploaded file that is not bound to a memo within 24 hours is deleted. A workspace can hold up to 20 unused URLs and 100 unbound files (1 GiB) at a time. Binding requires `write:resources`.
 
-## 5. Troubleshoot
+On Docker and other Bun self-hosted deployments, the background classifier uses EdgeEver's default model. It uses the note title, body, tags and attachment names, and chooses an existing notebook. Unclear notes and model failures stay in the inbox. The inbox UI shows classification status and lets users retry. Set `EDGE_EVER_AUTO_CLASSIFY=false` in the service environment to turn off automatic classification, or set `EDGE_EVER_AUTO_CLASSIFY_WORKSPACE` to limit it to one workspace. When classification is off, `autoClassify: true` still moves a note into 等待分类; it just does not create a classification job.
+
+## 7. Troubleshoot
 
 | Symptom | Cause and fix |
 |---|---|
@@ -115,7 +153,7 @@ Each URL accepts one file of exactly the declared size and type, up to 100 MiB, 
 
 Older instances may return the same generic `401` for missing and rejected credentials. Check the instance URL, header and token first.
 
-## 6. Custom built-in assistant and classification UI
+## 8. Custom built-in assistant and classification UI
 
 The Web sidebar shares note and attachment services with external MCP clients; local ACP is not required. Referencing the current note shows a removable context chip. Selection and uploaded files retain their own remove controls. Without the body attached, editor identity only locates the note; tools read it when relevant to the request.
 

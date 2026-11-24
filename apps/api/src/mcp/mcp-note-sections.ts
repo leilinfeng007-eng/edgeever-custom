@@ -90,14 +90,22 @@ export function applyNoteSectionOperations(markdown: string, operations: NoteSec
     }
     const { lines, headings } = scanHeadings(current);
     const matches = headings.filter(item => normalizeHeading(item.title) === normalizeHeading(heading));
+    // 章节问题必须让客户端能改对目标，而不是退回整篇重写。
+    const availableHeadings = [...new Set(headings.map(item => item.title))];
     if (!matches.length) {
-      throw new AppError("section_not_found", `Section "${heading}" was not found in this note.`, 409);
+      throw new AppError(
+        "section_not_found",
+        `Section "${heading}" was not found in this note.`,
+        409,
+        { heading, availableHeadings },
+      );
     }
     if (matches.length > 1) {
       throw new AppError(
         "section_ambiguous",
         `Section "${heading}" matches ${matches.length} headings. Make the heading unique before editing; the note was not changed.`,
         409,
+        { heading, matchCount: matches.length, availableHeadings },
       );
     }
     const target = matches[0]!;
@@ -109,6 +117,75 @@ export function applyNoteSectionOperations(markdown: string, operations: NoteSec
     current = spliceSection(lines, target, boundary, operation.contentMarkdown, mode);
   }
   return current;
+}
+
+export type NoteInsertAnchor =
+  | { section: string; position?: "start" | "end" }
+  | { afterText: string }
+  | { beforeText: string };
+
+/**
+ * 在指定章节或正文锚点插入一段内容（用于把附件放到目标位置）。
+ * 定位失败时返回可选章节，绝不退回追加到文末。
+ */
+export function insertMarkdownAtAnchor(markdown: string, anchor: NoteInsertAnchor, content: string): string {
+  const body = content.trim();
+  if (!body) throw new AppError("invalid_params", "Inserted content is empty.", 400);
+  const lines = markdown.split("\n");
+
+  if ("afterText" in anchor || "beforeText" in anchor) {
+    const needle = ("afterText" in anchor ? anchor.afterText : anchor.beforeText).trim();
+    if (!needle) throw new AppError("invalid_params", "Anchor text is empty.", 400);
+    const matches = lines
+      .map((line, index) => (line.includes(needle) ? index : -1))
+      .filter(index => index >= 0);
+    if (!matches.length) {
+      throw new AppError(
+        "anchor_not_found",
+        `Anchor text "${needle}" was not found in this note.`,
+        409,
+        { anchors: { afterText: "afterText" in anchor ? needle : undefined, beforeText: "beforeText" in anchor ? needle : undefined } },
+      );
+    }
+    if (matches.length > 1) {
+      throw new AppError(
+        "anchor_ambiguous",
+        `Anchor text "${needle}" appears ${matches.length} times. Use a unique section heading instead.`,
+        409,
+        { matchCount: matches.length },
+      );
+    }
+    const index = matches[0]!;
+    const insertAt = "afterText" in anchor ? index + 1 : index;
+    const result = [...lines.slice(0, insertAt), "", ...body.split("\n"), ...lines.slice(insertAt)];
+    return result.join("\n").replace(/\n{3,}/g, "\n\n");
+  }
+
+  const { headings } = scanHeadings(markdown);
+  const matches = headings.filter(item => normalizeHeading(item.title) === normalizeHeading(anchor.section));
+  const availableHeadings = [...new Set(headings.map(item => item.title))];
+  if (!matches.length) {
+    throw new AppError(
+      "section_not_found",
+      `Section "${anchor.section}" was not found in this note.`,
+      409,
+      { heading: anchor.section, availableHeadings },
+    );
+  }
+  if (matches.length > 1) {
+    throw new AppError(
+      "section_ambiguous",
+      `Section "${anchor.section}" matches ${matches.length} headings. Make the heading unique before inserting.`,
+      409,
+      { heading: anchor.section, matchCount: matches.length, availableHeadings },
+    );
+  }
+  const target = matches[0]!;
+  const targetIndex = headings.indexOf(target);
+  const end = sectionEnd(headings, targetIndex, lines.length);
+  const insertAt = anchor.position === "start" ? target.line + 1 : end;
+  const result = [...lines.slice(0, insertAt), "", ...body.split("\n"), ...lines.slice(insertAt)];
+  return result.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
 /** 去掉模板填写说明、HTML 注释和没有任何正文的空章节，保留完整有效内容。 */

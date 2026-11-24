@@ -3016,6 +3016,21 @@ export const de = {
       "deleteDescription": "Der Anhang wird dauerhaft aus dem Speicher und dieser Notiz entfernt. Dies kann nicht rückgängig gemacht werden.",
       "failed": "Die Anhangsaktion ist fehlgeschlagen. Versuchen Sie es erneut."
     },
+    attachmentSource: {
+      add: "Quelle hinzufügen",
+      edit: "Quelle bearbeiten",
+      dialogTitle: "Anhangsquelle",
+      dialogDescription: "Datei, Seite, Kapitel, Arbeitsblatt oder Bereich der Quelle erfassen. Unbekannte Felder leer lassen; es wird nichts geraten.",
+      placeholder: "z. B. bericht.pdf · P.3-5 · Kapitel: Anforderungen",
+      confirm: "Quelle speichern",
+    },
+    attachmentSummary: {
+      action: "Anhangsübersicht aktualisieren",
+      updated: "Anhangsübersicht aktualisiert ({{count}}).",
+      unchanged: "Die Anhangsübersicht ist aktuell ({{count}}).",
+      empty: "Diese Notiz hat keine Anhänge für eine Übersicht.",
+      failed: "Anhangsübersicht konnte nicht aktualisiert werden: {{message}}",
+    },
     "placeholder": "Leertaste für KI · / für Befehle · @ für Notizen",
     "placeholderCommands": "/ für Befehle · @ für Notizen",
     "noteBodyAria": "Notizinhalt",

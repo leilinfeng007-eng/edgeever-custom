@@ -2,7 +2,15 @@
  * 已绑定附件 REST 入口：上传、读取、内容替换与恢复；底层对象通过存储契约访问。
  * 先上传后绑定的临时资源走 pending-resource-routes，文本提取走 attachment-content-routes。
  */
-import { resolveResourceUploadMimeType, ResourceUpdateSchema, type MemoDetail, type Resource } from "@edgeever/shared";
+import {
+  normalizeAttachmentSource,
+  readAttachmentSourceFromMetadata,
+  resolveResourceUploadMimeType,
+  ResourceUpdateSchema,
+  type AttachmentSource,
+  type MemoDetail,
+  type Resource,
+} from "@edgeever/shared";
 import { zValidator } from "@hono/zod-validator";
 import type { Context, Hono } from "hono";
 import { auditStatement } from "../common/audit";
@@ -19,6 +27,7 @@ import {
   mapResource,
   mapResourceListItem,
   mapResourceStorageSummary,
+  mergeAttachmentSourceMetadata,
   normalizeFilename,
   type ResourceListRow,
   type ResourceRow,
@@ -36,6 +45,7 @@ type ResourceRouteDependencies = {
     mimeType: string;
     bytes: Uint8Array;
     actor: AuditActor;
+    origin?: AttachmentSource | null;
   }) => Promise<Resource>;
   createImageResource: (context: AppContext, input: {
     memoId: string;
@@ -44,6 +54,7 @@ type ResourceRouteDependencies = {
     bytes: Uint8Array;
     actor: AuditActor;
     source: "upload" | "mcp";
+    origin?: AttachmentSource | null;
   }) => Promise<Resource>;
   getMemoDetail: (
     database: DatabaseAdapter,
@@ -90,6 +101,28 @@ const appErrorResponse = (context: AppContext, error: unknown) => {
   throw error;
 };
 
+type ParsedSource = { ok: true; source: AttachmentSource | null } | { ok: false };
+
+/**
+ * 解析来源入参：multipart 里是 JSON 字符串，PATCH 里是对象。
+ * 缺失/null/空串 = 没有来源；JSON 坏了或规范化后为空 = 非法，调用方返回 400。
+ */
+const parseAttachmentSourceInput = (value: unknown): ParsedSource => {
+  if (value === undefined || value === null) return { ok: true, source: null };
+  let candidate: unknown = value;
+  if (typeof value === "string") {
+    if (!value.trim()) return { ok: true, source: null };
+    try {
+      candidate = JSON.parse(value) as unknown;
+    } catch {
+      return { ok: false };
+    }
+  }
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return { ok: false };
+  const source = normalizeAttachmentSource(candidate);
+  return source ? { ok: true, source } : { ok: false };
+};
+
 export const registerResourceRoutes = (
   app: Hono<AppEnv>,
   dependencies: ResourceRouteDependencies,
@@ -103,7 +136,7 @@ export const registerResourceRoutes = (
     const [rows, stats] = await Promise.all([
       context.env.storage.db.prepare(
         `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind,
-                r.mime_type, r.filename, r.byte_size, r.sha256, r.width, r.height,
+                r.mime_type, r.filename, r.byte_size, r.sha256, r.width, r.height, r.metadata_json,
                 r.created_at, r.updated_at, m.title AS memo_title, m.excerpt AS memo_excerpt,
                 m.is_deleted AS memo_is_deleted
          FROM resources r
@@ -175,11 +208,22 @@ export const registerResourceRoutes = (
       bytes: new Uint8Array(await file.arrayBuffer()),
       actor: getAuditActor(context),
     };
+    // 可选 multipart 字段 source（JSON 字符串）：非法就整条拒绝，不写脏数据。
+    const parsedSource = parseAttachmentSourceInput(form.get("source") ?? undefined);
+    if (!parsedSource.ok) {
+      return apiError(
+        context,
+        "invalid_attachment_source",
+        "Attachment source must be a JSON object with at least one valid field.",
+        400,
+      );
+    }
+    const origin = { ...(parsedSource.source ? { origin: parsedSource.source } : {}) };
     let resource: Resource;
     try {
       resource = SUPPORTED_IMAGE_MIME_TYPES.has(input.mimeType)
-        ? await dependencies.createImageResource(context, { ...input, source: "upload" })
-        : await dependencies.createAttachmentResource(context, input);
+        ? await dependencies.createImageResource(context, { ...input, ...origin, source: "upload" })
+        : await dependencies.createAttachmentResource(context, { ...input, ...origin });
     } catch (error) {
       return appErrorResponse(context, error);
     }
@@ -392,17 +436,53 @@ export const registerResourceRoutes = (
       const filename = normalizeFilename(context.req.valid("json").filename);
       if (!filename) return badRequest(context, "Resource filename is required.");
 
+      // ResourceUpdateSchema 只校验 filename；source 在这里单独解析，body 已由
+      // HonoRequest 缓存，重读拿到的仍是完整原始对象。
+      const rawBody = await context.req.json().catch(() => null) as Record<string, unknown> | null;
+      const sourceProvided = Boolean(rawBody) && Object.prototype.hasOwnProperty.call(rawBody, "source");
+      const parsedSource = parseAttachmentSourceInput(rawBody?.source);
+      if (!parsedSource.ok) {
+        return apiError(
+          context,
+          "invalid_attachment_source",
+          "Attachment source must be an object with at least one valid field, or null to clear it.",
+          400,
+        );
+      }
+      const nextMetadataJson = sourceProvided
+        ? mergeAttachmentSourceMetadata(resource.metadata_json, parsedSource.source)
+        : null;
+
       const now = isoNow();
       const actor = getAuditActor(context);
       await context.env.storage.db.batch([
-        context.env.storage.db.prepare(
-          `UPDATE resources SET filename = ?, updated_at = ? WHERE id = ?`,
-        ).bind(filename, now, resourceId),
+        nextMetadataJson === null
+          ? context.env.storage.db.prepare(
+            `UPDATE resources SET filename = ?, updated_at = ? WHERE id = ?`,
+          ).bind(filename, now, resourceId)
+          : context.env.storage.db.prepare(
+            `UPDATE resources SET filename = ?, metadata_json = ?, updated_at = ? WHERE id = ?`,
+          ).bind(filename, nextMetadataJson, now, resourceId),
         auditStatement(context.env.storage.db, actor.actorType, actor.actorId, "resource.rename", "resource", resourceId, {
           memoId: resource.memo_id,
           previousFilename: resource.filename,
           filename,
         }),
+        ...(sourceProvided
+          ? [auditStatement(
+            context.env.storage.db,
+            actor.actorType,
+            actor.actorId,
+            "resource.source.update",
+            "resource",
+            resourceId,
+            {
+              memoId: resource.memo_id,
+              previousSource: readAttachmentSourceFromMetadata(resource.metadata_json),
+              source: parsedSource.source,
+            },
+          )]
+          : []),
       ]);
 
       const updated = await dependencies.getResourceRow(

@@ -50,8 +50,24 @@ import { isDemoModeEnabled } from "../workspace/demo-mode";
 import { createId, isoNow } from "../common/entity-utils";
 import { sha256 } from "../common/hash-utils";
 import { resolveMcpNoteTemplate, selectMcpNoteTemplate } from "./mcp-note-template";
-import { applyNoteSectionOperations, cleanTemplateMarkdown, type NoteSectionOperation } from "./mcp-note-sections";
+import {
+  applyNoteSectionOperations,
+  cleanTemplateMarkdown,
+  insertMarkdownAtAnchor,
+  type NoteInsertAnchor,
+  type NoteSectionOperation,
+} from "./mcp-note-sections";
 import { stageMemoResource, validateMcpResourcePlacement } from "./mcp-note-resources";
+import { resolveMemoPlacement } from "../notes/memo-placement";
+import { applyAttachmentSummary, collectAttachmentSummaryEntries } from "../attachments/attachment-summary";
+import { mergeAttachmentSourceMetadata } from "../attachments/resource-service";
+import { findMemoDuplicates } from "../notes/memo-duplicate-service";
+import {
+  buildAiConversationMarkdown,
+  buildConversationTitle,
+  questionSummary,
+} from "../notes/ai-note-service";
+import { AI_NOTE_TAG, createExcerpt, formatAttachmentSource, normalizeAttachmentSource, normalizeTags, type AttachmentSource } from "@edgeever/shared";
 import {
   decodeBase64Data,
   encodeBase64Data,
@@ -88,6 +104,7 @@ import {
   createNotebookRecord,
   deleteNotebookTree,
   findNotebooks,
+  findWorkspaceInboxId,
   getNotebook,
   listNotebooks,
   resolveNotebookPath,
@@ -266,6 +283,46 @@ const describeCandidates = (candidates: DuplicateCandidate[]) =>
 const normalizeCandidateTitle = (value: string | null | undefined) =>
   (value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 
+/**
+ * 同题候选的展示信息：memoId、标题、所在笔记本和摘要。
+ * 客户端据此让用户选择「补充已有」或「另存新笔记」。
+ * 摘要与笔记列表同一回退链：持久化摘要 → 索引正文。
+ */
+async function describeDuplicateCandidates(
+  db: DatabaseAdapter,
+  workspaceId: string,
+  candidates: DuplicateCandidate[],
+) {
+  if (!candidates.length) return [];
+  const ids = candidates.map(candidate => candidate.id);
+  const rows = await db.prepare(`
+    SELECT m.id, m.title, m.notebook_id AS notebookId, n.name AS notebookName, m.excerpt, c.content_text
+    FROM memos m
+    LEFT JOIN notebooks n ON n.id = m.notebook_id AND n.workspace_id = m.workspace_id
+    LEFT JOIN memo_contents c ON c.memo_id = m.id
+    WHERE m.workspace_id = ? AND m.id IN (${ids.map(() => "?").join(", ")})
+  `).bind(workspaceId, ...ids).all<{
+    id: string;
+    title: string | null;
+    notebookId: string;
+    notebookName: string | null;
+    excerpt: string | null;
+    content_text: string | null;
+  }>();
+  const byId = new Map(rows.results.map(row => [row.id, row]));
+  return candidates.map(candidate => {
+    const row = byId.get(candidate.id);
+    return {
+      memoId: candidate.id,
+      title: row?.title ?? candidate.title ?? "",
+      notebookId: row?.notebookId ?? candidate.notebookId,
+      notebookName: row?.notebookName ?? null,
+      excerpt: row?.excerpt || createExcerpt(row?.content_text ?? ""),
+      revision: candidate.revision,
+    };
+  });
+}
+
 /** 内容哈希与标题分别检索；标题只用于提示确认，不单独作为合并依据。 */
 async function findDuplicateCandidates(
   db: DatabaseAdapter,
@@ -351,6 +408,108 @@ const parseSectionOperations = (value: unknown): NoteSectionOperation[] | undefi
     return { heading, mode, contentMarkdown };
   });
 };
+
+/**
+ * 可选的幂等标识：同一次请求超时重试时，服务器返回第一次的结果而不是再写一遍。
+ * 用户日后有意重复相同文字时省略它或换一个值即可。
+ */
+const parseIdempotencyKey = (value: unknown): string | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    throw new AppError("invalid_params", "idempotencyKey must be a string.", 400);
+  }
+  const key = value.trim();
+  if (!key) return undefined;
+  if (key.length > 200) {
+    throw new AppError("invalid_params", "idempotencyKey must be at most 200 characters.", 400);
+  }
+  return key;
+};
+
+const readIdempotentReceipt = async (
+  db: DatabaseAdapter,
+  workspaceId: string,
+  tool: string,
+  key: string | undefined,
+) => {
+  if (!key) return null;
+  const row = await db.prepare(
+    `SELECT memo_id AS memoId FROM mcp_idempotency_receipts
+     WHERE workspace_id = ? AND tool = ? AND idempotency_key = ?`,
+  ).bind(workspaceId, tool, key).first<{ memoId: string }>();
+  return row?.memoId ?? null;
+};
+
+const idempotencyReceiptStatement = (
+  db: DatabaseAdapter,
+  workspaceId: string,
+  tool: string,
+  key: string,
+  memoId: string,
+) =>
+  db.prepare(
+    `INSERT INTO mcp_idempotency_receipts (workspace_id, tool, idempotency_key, memo_id, created_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (workspace_id, tool, idempotency_key) DO UPDATE SET memo_id = excluded.memo_id`,
+  ).bind(workspaceId, tool, key, memoId, isoNow());
+
+/** 正文末尾追加；与内置助手保存回答时的分隔符保持一致。 */
+const appendToEndMarkdown = (markdown: string, addition: string) =>
+  `${markdown}${markdown.trim() ? "\n\n---\n\n" : ""}${addition}`;
+
+/** 复用共享来源格式：对象或 null 返回规范化来源。 */
+const parseAttachmentSourceArg = (value: unknown): AttachmentSource | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError("invalid_attachment_source", "source must be an object with valid fields.", 400);
+  }
+  const source = normalizeAttachmentSource(value as Record<string, unknown>);
+  if (!source) {
+    throw new AppError("invalid_attachment_source", "Attachment source must contain at least one valid field.", 400);
+  }
+  return source;
+};
+
+/** 插入位置：唯一章节，或唯一的正文前后锚点。 */
+const parseInsertAnchor = (value: unknown): NoteInsertAnchor => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError("invalid_params", "anchor must be an object.", 400);
+  }
+  const record = value as Record<string, unknown>;
+  const heading = typeof record.section === "string" ? record.section.trim() : "";
+  const afterText = typeof record.afterText === "string" ? record.afterText.trim() : "";
+  const beforeText = typeof record.beforeText === "string" ? record.beforeText.trim() : "";
+  const provided = [heading, afterText, beforeText].filter(Boolean);
+  if (provided.length !== 1) {
+    throw new AppError("invalid_params", "Provide exactly one of section, afterText, or beforeText.", 400);
+  }
+  if (heading) {
+    if (record.position !== undefined && record.position !== "start" && record.position !== "end") {
+      throw new AppError("invalid_params", 'anchor.position must be "start" or "end".', 400);
+    }
+    return { section: heading, position: record.position === "start" ? "start" : "end" };
+  }
+  return afterText ? { afterText } : { beforeText };
+};
+
+/** 客户端报告需要的稳定字段，不重复整篇正文。 */
+const memoWriteSummary = (memo: MemoDetail, input: {
+  changed: boolean;
+  moved: boolean;
+  classificationQueued: boolean;
+  placement: string;
+  action: string;
+}) => ({
+  memoId: memo.id,
+  title: memo.title,
+  notebookId: memo.notebookId,
+  revision: memo.revision,
+  changed: input.changed,
+  moved: input.moved,
+  classificationQueued: input.classificationQueued,
+  placement: input.placement,
+  action: input.action,
+});
 
 export const callMcpTool = async (
   c: AppContext,
@@ -632,28 +791,45 @@ export const callMcpTool = async (
         const changed = sourceMemo.contentMarkdown !== contentMarkdown
           || (title !== undefined && title !== sourceMemo.title)
           || (requestedTags.length > 0 && JSON.stringify(requestedTags) !== JSON.stringify(sourceMemo.tags.filter(tag => requestedTags.includes(tag))));
-        if (!changed && !bind) return { memo: sourceMemo, reused: true };
+        if (!changed && !bind) {
+          return {
+            memo: sourceMemo, reused: true,
+            ...memoWriteSummary(sourceMemo, {
+              changed: false, moved: false, classificationQueued: false, placement: "keep", action: "reuse",
+            }),
+          };
+        }
         if (resourceIds.length || changed) {
           await validateMcpResourcePlacement(
             db, workspaceId, contentMarkdown, resourceIds,
             { id: sourceMemo.id, contentMarkdown: sourceMemo.contentMarkdown, allowRemoval: false },
           );
         }
-        const explicitLocation = Boolean(destination) || args.autoClassify === false;
-        const toInbox = !explicitLocation && changed && !sourceMemo.isArchived
-          && canClassifyInbox(c.env, workspaceId)
-          && !(await hasInboxHold(db, workspaceId, sourceMemo.id));
-        const targetNotebook = toInbox ? await resolveWorkspaceInboxId(db, workspaceId) : destination;
-        const classificationEffects = toInbox
-          ? enqueueInboxClassification(c.env, auth, targetNotebook!, sourceMemo.id, true)
-          : explicitLocation ? stopMemoClassification(c.env, auth, sourceMemo.id) : [];
+        // 按来源复用已有笔记时沿用同一归属规则：未指定笔记本留在原处，
+        // 只有明确要求重新分类才移入等待分类。
+        const placement = resolveMemoPlacement({
+          currentNotebookId: sourceMemo.notebookId,
+          inboxId: await findWorkspaceInboxId(db, workspaceId),
+          requestedNotebookId: destination,
+          reclassify: args.autoClassify === true && !destination && !sourceMemo.isArchived,
+          retain: args.autoClassify === false,
+          classifyEnabled: canClassifyInbox(c.env, workspaceId),
+          contentChanged: changed,
+          inboxHold: !destination && await hasInboxHold(db, workspaceId, sourceMemo.id),
+        });
+        const targetNotebook = placement.notebookId === sourceMemo.notebookId ? undefined : placement.notebookId;
+        const classificationEffects = placement.queueClassification
+          ? enqueueInboxClassification(c.env, auth, placement.notebookId, sourceMemo.id, true)
+          : placement.hold
+            ? stopMemoClassification(c.env, auth, sourceMemo.id)
+            : [];
         const result = await withBindingConflict(Boolean(bind), () => updateMemoRecord(
           db,
           workspaceId,
           sourceMemo.id,
           {
             expectedRevision: sourceMemo.revision,
-            notebookId: targetNotebook ?? undefined,
+            notebookId: targetNotebook,
             title: title ?? sourceMemo.title ?? undefined,
             contentMarkdown,
             tags: requestedTags.length ? tags : undefined,
@@ -672,15 +848,25 @@ export const callMcpTool = async (
             ],
           },
         ));
-        if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409);
-        return { memo: result.memo, reused: true, updated: true };
+        if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409, result.details);
+        return {
+          memo: result.memo, reused: true, updated: true,
+          ...memoWriteSummary(result.memo, {
+            changed: result.memo.revision !== sourceMemo.revision,
+            moved: placement.moved,
+            classificationQueued: placement.queueClassification,
+            placement: placement.kind,
+            action: "source_update",
+          }),
+        };
       }
 
       if (resourceIds.length && (args.requireResourcePlacement === true || !destination)) {
         await validateMcpResourcePlacement(db, workspaceId, contentMarkdown, resourceIds);
       }
       // 写入前检索内容哈希与标题候选：完全一致时复用，标题命中但内容不同时要求确认，
-      // 不自动合并，也不仅凭标题创建副本。
+      // 不自动合并，也不仅凭标题创建副本。候选携带 memoId/标题/笔记本/摘要，
+      // 供客户端展示「补充已有／另存新笔记」。
       if (!bind && args.allowDuplicate !== true && title && contentMarkdown.trim()) {
         const { exact, sameTitle } = await findDuplicateCandidates(
           db, workspaceId, title, contentHash, destination ?? undefined,
@@ -692,17 +878,26 @@ export const callMcpTool = async (
             "duplicate_match_ambiguous",
             `Multiple notes have identical content and title: ${describeCandidates(exactTitleMatches)}. Read them before choosing a note to update.`,
             409,
+            { candidates: await describeDuplicateCandidates(db, workspaceId, exactTitleMatches) },
           );
         }
         if (exactTitleMatches[0]) {
           const memo = await getMemoDetail(db, workspaceId, exactTitleMatches[0].id);
-          if (memo) return { memo, reused: true };
+          if (memo) {
+            return {
+              memo, reused: true,
+              ...memoWriteSummary(memo, {
+                changed: false, moved: false, classificationQueued: false, placement: "keep", action: "reuse",
+              }),
+            };
+          }
         }
         if (exact.length) {
           throw new AppError(
             "duplicate_match_found",
             `The same content already exists under a different title: ${describeCandidates(exact)}. Read it and update its title, or pass allowDuplicate=true to create a separate note.`,
             409,
+            { candidates: await describeDuplicateCandidates(db, workspaceId, exact) },
           );
         }
         const titleMatches = sameTitle;
@@ -711,6 +906,7 @@ export const callMcpTool = async (
             "duplicate_match_ambiguous",
             `Multiple notes match the title "${title}": ${describeCandidates(titleMatches)}. Read them before choosing a note to update, or pass allowDuplicate=true.`,
             409,
+            { candidates: await describeDuplicateCandidates(db, workspaceId, titleMatches) },
           );
         }
         if (titleMatches[0]) {
@@ -718,10 +914,13 @@ export const callMcpTool = async (
             "duplicate_match_found",
             `A note titled "${title}" already exists: ${describeCandidates(titleMatches)}. Read it and update it, or pass allowDuplicate=true to create a separate copy.`,
             409,
+            { candidates: await describeDuplicateCandidates(db, workspaceId, titleMatches) },
           );
         }
       }
 
+      // 新建时：指定笔记本就直接存入目标；未指定则进入等待分类，
+      // 是否排队由自动分类开关决定，autoClassify:false 只保留在收件箱。
       const memo = await withBindingConflict(Boolean(bind), () => createMemoRecord(db, workspaceId, {
         notebookId,
         title,
@@ -739,11 +938,199 @@ export const callMcpTool = async (
       ]));
       return {
         memo,
+        ...memoWriteSummary(memo, {
+          changed: true,
+          moved: false,
+          classificationQueued: !destination && args.autoClassify !== false && canClassifyInbox(c.env, workspaceId),
+          placement: destination ? "explicit" : "inbox",
+          action: "create",
+        }),
         ...(requestedTemplateId ? { appliedTemplateId: requestedTemplateId } : {}),
         ...(template ? { appliedTemplate: { id: template.id, name: template.name } } : {}),
         templateSelection: selection.selection,
         inferredPurpose: selection.inferredPurpose,
         ...(resourceIds.length ? { resources: await listResourcesForMemo(db, workspaceId, memo.id) } : {}),
+      };
+    }
+    case "save_ai_conversation": {
+      assertScope(auth, "write:memos");
+      const db = c.env.storage.db;
+      const workspaceId = auth.workspaceId;
+      const message = getRequiredString(args.message, "message");
+      const response = getRequiredString(args.response, "response");
+      const memoId = getOptionalString(args.memoId);
+      const idempotencyKey = parseIdempotencyKey(args.idempotencyKey);
+      const replayMemoId = await readIdempotentReceipt(db, workspaceId, "save_ai_conversation", idempotencyKey);
+      if (replayMemoId) {
+        const replayed = await getMemoDetail(db, workspaceId, replayMemoId);
+        if (replayed) {
+          return {
+            memo: replayed,
+            ...memoWriteSummary(replayed, {
+              changed: false, moved: false, classificationQueued: false, placement: "keep", action: "save_conversation",
+            }),
+            reused: true, idempotentReplay: true,
+          };
+        }
+      }
+      const duplicate = getOptionalString(args.duplicate) ?? "ask";
+      if (!["ask", "supplement", "merge", "new"].includes(duplicate)) {
+        throw new AppError("invalid_params", 'duplicate must be "ask", "supplement", "merge", or "new".', 400);
+      }
+      // 「同题合并」= 补充进同题笔记后重新归类；与「补充指定笔记」不同，
+      // 后者按用户点名的笔记原地补充，不改变归属。
+      const mergeIntent = duplicate === "merge" || (duplicate !== "supplement" && args.reclassify === true);
+      if ((duplicate === "merge" || duplicate === "supplement") && !memoId) {
+        throw new AppError("invalid_params", `duplicate "${duplicate}" requires the target memoId.`, 400);
+      }
+      if (memoId && !["merge", "supplement"].includes(duplicate)) {
+        throw new AppError(
+          "invalid_params",
+          'Pass duplicate "supplement" to keep the note in place, or "merge" to move it back to 等待分类.',
+          400,
+        );
+      }
+      const sectionInput = args.section as Record<string, unknown> | null | undefined;
+      const section = sectionInput
+        ? {
+          heading: getRequiredString(sectionInput.heading, "section.heading"),
+          mode: sectionInput.mode === "replace" ? "replace" as const : sectionInput.mode === "append" ? "append" as const : null,
+        }
+        : null;
+      if (sectionInput && !section?.mode) {
+        throw new AppError("invalid_params", 'section.mode must be "append" or "replace".', 400);
+      }
+      const sectionMode = section?.mode;
+      const actor = getAuditActor(c);
+      const actorLabel = getActorLabel(c);
+      const extraTags = getOptionalStringArray(args.tags);
+
+      // 明确点名了目标笔记：直接补充，保留原笔记本与标签，只补上 AI沉淀。
+      if (memoId) {
+        const target = await getMemoDetail(db, workspaceId, memoId);
+        if (!target) throw new AppError("not_found", "Memo not found", 404);
+        if (target.isDeleted || target.isArchived) {
+          throw new AppError("memo_unavailable", "The target note is in trash or archived. Restore it first.", 409);
+        }
+        const structured = parseDiagramDocument(target.contentMarkdown) || hasTableDocumentMarker(target.contentMarkdown)
+          || hasPosterDocumentMarker(target.contentMarkdown) || hasInfographicDocumentMarker(target.contentMarkdown);
+        if (structured) {
+          throw new AppError("append_unsupported", "Append to a prose note, or save this answer as a new note.", 400);
+        }
+        const expectedRevision = typeof args.expectedRevision === "number" && Number.isInteger(args.expectedRevision)
+          ? args.expectedRevision : target.revision;
+        if (expectedRevision !== target.revision) {
+          throw new AppError("revision_conflict", "Memo was updated elsewhere. Reload before supplementing it.", 409, {
+            expectedRevision, currentRevision: target.revision, memoId: target.id,
+            notebookId: target.notebookId, title: target.title,
+          });
+        }
+        const expectedContentHash = getOptionalString(args.expectedContentHash);
+        if (expectedContentHash && expectedContentHash !== target.contentHash) {
+          throw new AppError("content_conflict", "Note content changed after it was read.", 409, {
+            memoId: target.id, revision: target.revision,
+          });
+        }
+        const contentMarkdown = section && sectionMode
+          ? applyNoteSectionOperations(target.contentMarkdown, [{
+            heading: section.heading, mode: sectionMode, contentMarkdown: response,
+          }])
+          : appendToEndMarkdown(target.contentMarkdown, response);
+        const tags = normalizeTags([...target.tags, ...extraTags, AI_NOTE_TAG]);
+        // 用户明确要求重新分类（或同题合并时选择重新归类）：移入等待分类。
+        // 自动分类关闭时这只是移动，不产生分类任务。
+        const inboxId = await findWorkspaceInboxId(db, workspaceId);
+        const placement = resolveMemoPlacement({
+          currentNotebookId: target.notebookId,
+          inboxId,
+          requestedNotebookId: getOptionalString(args.notebookId),
+          reclassify: mergeIntent,
+          classifyEnabled: canClassifyInbox(c.env, workspaceId),
+          contentChanged: true,
+        });
+        const moveNotebookId = placement.notebookId === target.notebookId ? undefined : placement.notebookId;
+        const classificationEffects = placement.queueClassification
+          ? enqueueInboxClassification(c.env, auth, placement.notebookId, target.id, true)
+          : placement.hold
+            ? stopMemoClassification(c.env, auth, target.id)
+            : [];
+        const receipt = idempotencyKey
+          ? idempotencyReceiptStatement(db, workspaceId, "save_ai_conversation", idempotencyKey, target.id)
+          : null;
+        const result = await updateMemoRecord(db, workspaceId, target.id, {
+          expectedRevision: target.revision,
+          notebookId: moveNotebookId,
+          contentMarkdown,
+          tags,
+        }, actor, actorLabel, false, { before: [], after: (id) => [...classificationEffects, ...(receipt ? [receipt] : [])] });
+        if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409, result.details);
+        return {
+          memo: result.memo,
+          ...memoWriteSummary(result.memo, {
+            changed: result.memo.revision !== target.revision,
+            moved: placement.moved,
+            classificationQueued: placement.queueClassification,
+            placement: placement.kind,
+            action: mergeIntent ? "merge" : "supplement",
+          }),
+          reused: false,
+        };
+      }
+
+      const objectTitle = getOptionalString(args.object);
+      const topic = getOptionalString(args.topic) ?? questionSummary(message);
+      const title = getOptionalString(args.title) ?? buildConversationTitle({ object: objectTitle, topic });
+      const body = buildAiConversationMarkdown({ message, response });
+      const contentHash = await sha256(body + JSON.stringify(markdownToDoc(body)));
+      const candidates = await findMemoDuplicates(db, workspaceId, { title, contentHash });
+      if (duplicate === "ask" && candidates.length) {
+        throw new AppError(
+          "duplicate_match_found",
+          "A note about the same topic already exists. Choose to supplement it or save a new note.",
+          409,
+          { candidates: candidates.map(candidate => ({
+            memoId: candidate.id,
+            title: candidate.title,
+            notebookId: candidate.notebookId,
+            excerpt: candidate.excerpt,
+            reason: candidate.reason,
+          })) },
+        );
+      }
+      const destination = getOptionalString(args.notebookId);
+      const inboxId = await findWorkspaceInboxId(db, workspaceId);
+      const notebookId = destination ?? inboxId;
+      if (!notebookId) throw new AppError("inbox_notebook_missing", "The inbox notebook (等待分类) is unavailable.", 409);
+      // 新建：指定目标就直接存入；否则进入等待分类，自动分类可用时排队。
+      const queueClassification = !destination && canClassifyInbox(c.env, workspaceId);
+      const receipt = idempotencyKey
+        ? (newMemoId: string) => [idempotencyReceiptStatement(db, workspaceId, "save_ai_conversation", idempotencyKey, newMemoId)]
+        : null;
+      const memo = await createMemoRecord(db, workspaceId, {
+        notebookId,
+        title,
+        contentMarkdown: body,
+        tags: normalizeTags([AI_NOTE_TAG, ...extraTags]),
+      }, actor, actorLabel, (newMemoId) => [
+        ...(queueClassification
+          ? enqueueInboxClassification(c.env, auth, notebookId, newMemoId, true)
+          : destination ? stopMemoClassification(c.env, auth, newMemoId) : []),
+        ...(receipt ? receipt(newMemoId) : []),
+      ]);
+      return {
+        memo,
+        ...memoWriteSummary(memo, {
+          changed: true,
+          moved: false,
+          classificationQueued: queueClassification,
+          placement: destination ? "explicit" : "inbox",
+          action: duplicate === "new" ? "save_new" : "save_conversation",
+        }),
+        reused: false,
+        ...(candidates.length ? { duplicateCandidates: candidates.map(candidate => ({
+          memoId: candidate.id, title: candidate.title, notebookId: candidate.notebookId,
+          excerpt: candidate.excerpt, reason: candidate.reason,
+        })) } : {}),
       };
     }
     case "stage_memo_resource": {
@@ -757,6 +1144,7 @@ export const callMcpTool = async (
         mimeType: getRequiredString(args.mimeType, "mimeType"),
         filename: getRequiredString(args.filename, "filename"),
         label: getOptionalString(args.label),
+        origin: parseAttachmentSourceArg(args.source),
       }, getRequiredString(args.dataBase64, "dataBase64"));
     }
     // 返回上传 URL、方法、headers 与过期时间；只创建上传资格，不等于文件上传或笔记绑定成功。
@@ -772,6 +1160,7 @@ export const callMcpTool = async (
         filename: getOptionalString(args.filename),
         byteSize: typeof args.byteSize === "number" ? args.byteSize : Number.NaN,
         label: getOptionalString(args.label),
+        origin: parseAttachmentSourceArg(args.source),
       });
     }
     case "create_infographic_memo": {
@@ -973,6 +1362,16 @@ export const callMcpTool = async (
       const memoId = getRequiredString(args.memoId, "memoId");
       const db = c.env.storage.db;
       const workspaceId = auth.workspaceId;
+      const idempotencyKey = parseIdempotencyKey(args.idempotencyKey);
+      const replayMemoId = await readIdempotentReceipt(db, workspaceId, "update_memo", idempotencyKey);
+      if (replayMemoId) {
+        const replayed = await getMemoDetail(db, workspaceId, replayMemoId);
+        if (replayed) {
+          return { memo: replayed, ...memoWriteSummary(replayed, {
+            changed: false, moved: false, classificationQueued: false, placement: "keep", action: "update",
+          }), idempotentReplay: true };
+        }
+      }
       const existing = await getMemoDetail(db, workspaceId, memoId);
       if (!existing) throw new AppError("not_found", "Memo not found", 404);
       const markdown = typeof args.contentMarkdown === "string" ? args.contentMarkdown : undefined;
@@ -1013,20 +1412,40 @@ export const callMcpTool = async (
 
       const destination = getOptionalString(args.notebookId);
       const title = getOptionalString(args.title) ?? undefined;
-      const explicitLocation = Boolean(destination) || args.autoClassify === false;
-      const changed = Boolean(bind) || (title !== undefined && title !== existing.title) ||
-        (nextMarkdown !== undefined && nextMarkdown !== existing.contentMarkdown);
-      const toInbox = !explicitLocation && changed && !existingKind && !existing.isArchived &&
-        canClassifyInbox(c.env, workspaceId) &&
-        (args.autoClassify === true || !(await hasInboxHold(db, workspaceId, memoId)));
-      const notebookId = toInbox ? await resolveWorkspaceInboxId(db, workspaceId) : destination ?? undefined;
-      const classificationEffects = toInbox && notebookId
-        ? enqueueInboxClassification(c.env, auth, notebookId, memoId, true)
-        : explicitLocation ? stopMemoClassification(c.env, auth, memoId) : [];
+      const tags = Array.isArray(args.tags) ? getOptionalStringArray(args.tags) : undefined;
+      const changed = Boolean(bind)
+        || (title !== undefined && title !== existing.title)
+        || (nextMarkdown !== undefined && nextMarkdown !== existing.contentMarkdown)
+        || (tags !== undefined && JSON.stringify(tags) !== JSON.stringify(existing.tags));
+      const classifyEnabled = canClassifyInbox(c.env, workspaceId);
+      // 普通更新默认留在原笔记本；只有明确要求重新分类才移入等待分类。
+      // 结构化笔记与已归档笔记不参与归属变化；本次指定的目标笔记本优先。
+      const reclassify = args.autoClassify === true && !destination && !existingKind && !existing.isArchived;
+      const placement = resolveMemoPlacement({
+        currentNotebookId: existing.notebookId,
+        inboxId: await findWorkspaceInboxId(db, workspaceId),
+        requestedNotebookId: destination,
+        reclassify,
+        retain: args.autoClassify === false,
+        classifyEnabled,
+        contentChanged: changed,
+        inboxHold: !reclassify && !destination && await hasInboxHold(db, workspaceId, memoId),
+      });
+      const notebookId = placement.notebookId === existing.notebookId ? undefined : placement.notebookId;
+      const classificationEffects = placement.queueClassification || placement.hold || destination
+        ? (
+          placement.queueClassification
+            ? enqueueInboxClassification(c.env, auth, placement.notebookId, memoId, true)
+            : placement.hold
+              ? stopMemoClassification(c.env, auth, memoId)
+              : notebookClassificationChoice(c.env, auth, [memoId], placement.notebookId, false)
+        )
+        : [];
       const expectedRevision = typeof args.expectedRevision === "number" && Number.isInteger(args.expectedRevision)
         ? args.expectedRevision : auth.kind === "agent" ? existing.revision : undefined;
       // The read above validates the user's base. Repeat the check inside the
       // batch so a concurrent move or edit cannot be overwritten between reads.
+      // 冲突时返回当前版本，客户端据此重新读取而不是覆盖。
       const before = expectedRevision !== undefined ? [db.prepare(`
         UPDATE memo_contents SET revision = CASE
           WHEN revision = ? AND EXISTS (
@@ -1035,6 +1454,15 @@ export const callMcpTool = async (
           ) THEN revision ELSE NULL END
         WHERE memo_id = ?
       `).bind(expectedRevision, memoId, workspaceId, existing.notebookId, existing.updatedAt, memoId)] : [];
+      const receipt = idempotencyKey
+        ? idempotencyReceiptStatement(db, workspaceId, "update_memo", idempotencyKey, memoId)
+        : null;
+      const after = (id: string) => [
+        ...(bind?.(id) ?? []),
+        ...classificationEffects,
+        ...(receipt ? [receipt] : []),
+      ];
+      const hasAfter = Boolean(bind) || classificationEffects.length > 0 || Boolean(receipt);
       const result = await withBindingConflict(Boolean(bind), () => updateMemoRecord(
         db,
         workspaceId,
@@ -1045,19 +1473,45 @@ export const callMcpTool = async (
           title,
           isPinned: typeof args.isPinned === "boolean" ? args.isPinned : undefined,
           contentMarkdown: nextMarkdown,
-          tags: Array.isArray(args.tags) ? getOptionalStringArray(args.tags) : undefined,
+          tags,
           createdAt: getOptionalString(args.createdAt) ?? undefined,
           updatedAt: getOptionalString(args.updatedAt) ?? undefined,
         },
         actor,
         actorLabel,
         false,
-        bind || classificationEffects.length || before.length ? { before, after: (id) => [...(bind?.(id) ?? []), ...classificationEffects] } : undefined,
+        hasAfter || before.length ? { before, after } : undefined,
       ));
 
-      if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409);
+      if (!("memo" in result)) {
+        if (result.error === "revision_conflict") {
+          const current = await getMemoDetail(db, workspaceId, memoId);
+          throw new AppError(
+            result.error,
+            result.message,
+            result.status ?? 409,
+            {
+              ...(result.details ?? {}),
+              ...(current ? {
+                currentRevision: current.revision,
+                notebookId: current.notebookId,
+                title: current.title,
+                memoId: current.id,
+              } : {}),
+            },
+          );
+        }
+        throw new AppError(result.error, result.message, result.status ?? 409);
+      }
       return {
         memo: result.memo,
+        ...memoWriteSummary(result.memo, {
+          changed: result.memo.revision !== existing.revision,
+          moved: placement.moved,
+          classificationQueued: placement.queueClassification,
+          placement: placement.kind,
+          action: sectionOperations ? "section_update" : markdown !== undefined ? "rewrite" : "update",
+        }),
         ...(resourceIds.length ? { resources: await listResourcesForMemo(db, workspaceId, memoId) } : {}),
       };
     }
@@ -1070,7 +1524,7 @@ export const callMcpTool = async (
       }
 
       const deleted = await deleteMemosRecord(c.env, auth.workspaceId, memoIds, false, getAuditActor(c));
-      return { ok: true, deleted };
+      return { ok: true, deleted, action: "trash", changed: deleted > 0 };
     }
     case "restore_memos": {
       assertScope(auth, "write:memos");
@@ -1081,7 +1535,17 @@ export const callMcpTool = async (
       }
 
       const restored = await restoreMemosRecord(c.env.storage.db, auth.workspaceId, memoIds, getAuditActor(c));
-      return { ok: true, restored };
+      const memos = await Promise.all(memoIds.map(async (memoId) => {
+        const memo = await getMemoDetail(c.env.storage.db, auth.workspaceId, memoId);
+        return memo ? {
+          ...memoWriteSummary(memo, {
+            changed: true, moved: false, classificationQueued: false,
+            placement: memo.notebookId === await findWorkspaceInboxId(c.env.storage.db, auth.workspaceId) ? "inbox" : "keep",
+            action: "restore",
+          }),
+        } : null;
+      }));
+      return { ok: true, restored, action: "restore", changed: restored > 0, memos: memos.filter(Boolean) };
     }
     case "upload_memo_image": {
       assertScope(auth, "write:resources");
@@ -1209,19 +1673,158 @@ export const callMcpTool = async (
 
       const filename = getRequiredString(args.filename, "filename");
       const bytes = await decodeBase64Data(getRequiredString(args.dataBase64, "dataBase64"));
+      const origin = parseAttachmentSourceArg(args.source);
       const resource = await createAttachmentResource(c, {
         memoId,
         filename,
         mimeType: getRequiredString(args.mimeType, "mimeType"),
         bytes,
         actor: getAuditActor(c),
+        ...(origin ? { origin } : {}),
         afterStore: rescheduleInboxClassification(c.env, auth, memoId),
       });
       const label = getOptionalString(args.label) ?? normalizeFilename(filename) ?? "attachment";
+      const sourceTitle = origin ? formatAttachmentSource(origin) : null;
 
       return {
         resource,
-        markdownLink: `[${escapeMarkdownLinkLabel(label)}](${resource.url})`,
+        markdownLink: `[${escapeMarkdownLinkLabel(label)}](${resource.url}${sourceTitle ? ` "${escapeMarkdownLinkLabel(sourceTitle)}"` : ""})`,
+      };
+    }
+    case "set_attachment_source": {
+      assertScope(auth, "write:resources");
+      const db = c.env.storage.db;
+      const workspaceId = auth.workspaceId;
+      const memoId = getRequiredString(args.memoId, "memoId");
+      const resourceId = getRequiredString(args.resourceId, "resourceId");
+      const resource = await getResourceRow(db, workspaceId, resourceId, false, memoId);
+      if (!resource) {
+        throw new AppError("not_found", "Attachment not found in this memo.", 404);
+      }
+      // 复用同一套来源规范化：缺失字段留空，非法值直接拒绝，不猜测页码。
+      let source: AttachmentSource | null = null;
+      if (args.source !== undefined && args.source !== null) {
+        if (typeof args.source !== "object" || Array.isArray(args.source)) {
+          throw new AppError("invalid_attachment_source", "source must be an object, or null to clear it.", 400);
+        }
+        source = normalizeAttachmentSource(args.source as Record<string, unknown>);
+        if (!source) {
+          throw new AppError(
+            "invalid_attachment_source",
+            "Attachment source must contain at least one valid field, or null to clear it.",
+            400,
+          );
+        }
+      }
+      const metadataJson = mergeAttachmentSourceMetadata(resource.metadata_json, source);
+      const now = isoNow();
+      await db.batch([
+        db.prepare("UPDATE resources SET metadata_json = ?, updated_at = ? WHERE id = ? AND memo_id = ?")
+          .bind(metadataJson, now, resourceId, memoId),
+        auditStatement(db, getAuditActor(c).actorType, getAuditActor(c).actorId, "resource.source.update", "resource", resourceId, {
+          memoId,
+          previousSource: resource.metadata_json ? JSON.parse(resource.metadata_json)?.origin ?? null : null,
+          source,
+        }),
+      ]);
+      const updated = await getResourceRow(db, workspaceId, resourceId, false, memoId);
+      return {
+        resource: updated ? mapResource(updated) : null,
+        memoId,
+        resourceId,
+        action: "set_source",
+        changed: true,
+        summaryStale: true,
+      };
+    }
+    case "update_attachment_summary": {
+      assertScope(auth, "write:memos");
+      const db = c.env.storage.db;
+      const workspaceId = auth.workspaceId;
+      const memoId = getRequiredString(args.memoId, "memoId");
+      const expectedRevision = typeof args.expectedRevision === "number" && Number.isInteger(args.expectedRevision)
+        ? args.expectedRevision : null;
+      if (expectedRevision === null || expectedRevision < 0) {
+        throw new AppError("invalid_params", "expectedRevision must be a non-negative integer.", 400);
+      }
+      const memo = await getMemoDetail(db, workspaceId, memoId);
+      if (!memo) throw new AppError("not_found", "Memo not found", 404);
+      const expectedContentHash = getOptionalString(args.expectedContentHash);
+      if (memo.revision !== expectedRevision) {
+        throw new AppError("revision_conflict", "Memo was updated elsewhere. Reload before saving.", 409, {
+          expectedRevision, currentRevision: memo.revision, memoId: memo.id, notebookId: memo.notebookId,
+        });
+      }
+      if (expectedContentHash && expectedContentHash !== memo.contentHash) {
+        throw new AppError("content_conflict", "Note content changed after it was read.", 409, {
+          memoId: memo.id, revision: memo.revision,
+        });
+      }
+      const resources = await listResourcesForMemo(db, workspaceId, memoId);
+      const entries = collectAttachmentSummaryEntries(memo.contentJson, resources);
+      const applied = applyAttachmentSummary(memo.contentMarkdown ?? "", entries);
+      if (applied.total === 0 || !applied.changed) {
+        return {
+          memo, total: applied.total,
+          ...memoWriteSummary(memo, {
+            changed: false, moved: false, classificationQueued: false, placement: "keep", action: "update_attachment_summary",
+          }),
+        };
+      }
+      const result = await updateMemoRecord(db, workspaceId, memoId, {
+        expectedRevision, contentMarkdown: applied.markdown,
+      }, getAuditActor(c), getActorLabel(c), false);
+      if (!("memo" in result)) throw new AppError(result.error, result.message, result.status ?? 409, result.details);
+      return {
+        memo: result.memo, total: applied.total,
+        ...memoWriteSummary(result.memo, {
+          changed: true, moved: false, classificationQueued: false, placement: "keep", action: "update_attachment_summary",
+        }),
+      };
+    }
+    case "insert_memo_resource": {
+      assertScope(auth, "write:memos");
+      assertScope(auth, "write:resources");
+      const db = c.env.storage.db;
+      const workspaceId = auth.workspaceId;
+      const memoId = getRequiredString(args.memoId, "memoId");
+      const resourceId = getRequiredString(args.resourceId, "resourceId");
+      const memo = await getMemoDetail(db, workspaceId, memoId);
+      if (!memo) throw new AppError("not_found", "Memo not found", 404);
+      const resource = await getResourceRow(db, workspaceId, resourceId, false, memoId);
+      if (!resource) {
+        throw new AppError("not_found", "Upload the file to this memo before inserting it.", 404);
+      }
+      const anchor = parseInsertAnchor(args.anchor);
+      const resourceView = mapResource(resource);
+      const label = getOptionalString(args.label)
+        ?? normalizeFilename(resource.filename ?? "")
+        ?? (resource.kind === "attachment" ? "attachment" : "file");
+      const cardMarkdown = resource.kind === "image"
+        ? `![${escapeMarkdownImageAlt(label)}](${resourceView.url})`
+        : `[${escapeMarkdownLinkLabel(label)}](${resourceView.url})`;
+      const contentMarkdown = insertMarkdownAtAnchor(memo.contentMarkdown, anchor, cardMarkdown);
+      const expectedRevision = typeof args.expectedRevision === "number" && Number.isInteger(args.expectedRevision)
+        ? args.expectedRevision : auth.kind === "agent" ? memo.revision : undefined;
+      const result = await updateMemoRecord(db, workspaceId, memoId, {
+        expectedRevision, contentMarkdown,
+      }, getAuditActor(c), getActorLabel(c), false);
+      if (!("memo" in result)) {
+        if (result.error === "revision_conflict") {
+          const current = await getMemoDetail(db, workspaceId, memoId);
+          throw new AppError(result.error, result.message, result.status ?? 409, {
+            ...(result.details ?? {}),
+            ...(current ? { currentRevision: current.revision, memoId: current.id, notebookId: current.notebookId } : {}),
+          });
+        }
+        throw new AppError(result.error, result.message, result.status ?? 409, result.details);
+      }
+      return {
+        memo: result.memo, resource: resourceView,
+        ...memoWriteSummary(result.memo, {
+          changed: result.memo.revision !== memo.revision,
+          moved: false, classificationQueued: false, placement: "keep", action: "insert_resource",
+        }),
       };
     }
     // 同时要求 read:memos 与 read:resources；memoId/resourceId 定位已绑定附件，格式和分页规则见 mcp-attachment。

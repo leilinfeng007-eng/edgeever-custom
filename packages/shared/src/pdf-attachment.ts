@@ -1,6 +1,10 @@
 import { mergeAttributes, Node } from "@tiptap/core";
 import type { TiptapDoc, TiptapMark, TiptapNode, TiptapTextNode } from "./content";
-import { getAttachmentFilenameFromLabel, resourceLinkToMarkdown } from "./resource-links";
+import {
+  getAttachmentFilenameFromLabel,
+  isAttachmentSummaryLink,
+  resourceLinkToMarkdown,
+} from "./resource-links";
 import { normalizeAttachmentByteSize } from "./attachment-metadata";
 import { decodeString } from "micromark-util-decode-string";
 
@@ -11,7 +15,8 @@ export type PdfDisplayMode = (typeof PDF_DISPLAY_MODES)[number];
 export const resolvePdfDisplayMode = (value: unknown): PdfDisplayMode =>
   value === "inline" ? "inline" : "compact";
 
-const PDF_LINK_PATTERN = /^\[((?:\\.|[^[\]\\])+)\]\(([^\s)]+)(?:\s+"[^"]*")?\)/;
+// 第三段可选 title 承载来源描述，与 FileAttachment 保持一致；没有 title 的旧链接照旧解析。
+const PDF_LINK_PATTERN = /^\[((?:\\.|[^[\]\\])+)\]\(([^\s)]+)(?:\s+"((?:\\.|[^"\\])*)")?\)/;
 
 export const isPdfAttachment = (mimeType: string | null | undefined, filename: string | null | undefined) =>
   mimeType?.toLowerCase() === "application/pdf" || filename?.trim().toLowerCase().endsWith(".pdf") === true;
@@ -61,6 +66,18 @@ export const PdfAttachment = Node.create({
           "data-pdf-display-mode": resolvePdfDisplayMode(attributes.displayMode),
         }),
       },
+      /**
+       * 来源描述（`formatAttachmentSource` 的文本），空字符串表示未知。
+       * Markdown 里对应链接 title；旧笔记没有 title 时保持空字符串。
+       */
+      source: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-pdf-source") || "",
+        renderHTML: (attributes) => {
+          const source = typeof attributes.source === "string" ? attributes.source.trim() : "";
+          return source ? { "data-pdf-source": source } : {};
+        },
+      },
     };
   },
 
@@ -87,10 +104,16 @@ export const PdfAttachment = Node.create({
       mimeType: "application/pdf",
       byteSize: null,
       displayMode: "compact",
+      source: token.source || "",
     },
   }),
 
-  renderMarkdown: (node) => resourceLinkToMarkdown(String(node.attrs?.label || "PDF"), String(node.attrs?.url || "")),
+  renderMarkdown: (node) =>
+    resourceLinkToMarkdown(
+      String(node.attrs?.label || "PDF"),
+      String(node.attrs?.url || ""),
+      typeof node.attrs?.source === "string" ? node.attrs.source : null,
+    ),
 
   markdownTokenizer: {
     name: PDF_ATTACHMENT_NODE_TYPE,
@@ -102,6 +125,8 @@ export const PdfAttachment = Node.create({
     tokenize(source: string) {
       const match = PDF_LINK_PATTERN.exec(source);
       if (!match) return undefined;
+      // Summary rows use a plain link, even when the filename ends in .pdf.
+      if (isAttachmentSummaryLink(match[2])) return undefined;
       const label = decodeString(match[1]);
       if (!isPdfAttachment(null, label) && !isPdfAttachment(null, match[2])) {
         return undefined;
@@ -111,6 +136,8 @@ export const PdfAttachment = Node.create({
         raw: match[0],
         label,
         url: match[2],
+        // 链接 title 承载来源描述；没有 title 时留空，不额外输出空 title。
+        source: match[3] ? decodeString(match[3]) : "",
       };
     },
   },
@@ -127,6 +154,8 @@ const getLinkAttachmentAttrs = (link: TiptapMark | undefined, label: string) => 
     ? link.attrs.attachmentMimeType
     : "application/pdf",
   byteSize: normalizeAttachmentByteSize(link?.attrs?.attachmentByteSize),
+  // 旧链接的 title 就是来源文本；没有 title 时留空，不写占位内容。
+  source: typeof link?.attrs?.title === "string" ? link.attrs.title.trim() : "",
 });
 
 /** Upgrade legacy standalone PDF link paragraphs without changing their Markdown representation. */
@@ -138,7 +167,8 @@ export const upgradeStandalonePdfLinks = (doc: TiptapDoc): TiptapDoc => {
       if (child.type === "text" && "text" in child) {
         const link = getLinkMark(child);
         const href = link?.attrs?.href;
-        if (typeof href === "string" && (isPdfAttachment(null, child.text) || isPdfAttachment(null, href))) {
+        if (typeof href === "string" && !isAttachmentSummaryLink(href)
+          && (isPdfAttachment(null, child.text) || isPdfAttachment(null, href))) {
           changed = true;
           return {
             ...node,

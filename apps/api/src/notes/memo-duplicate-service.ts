@@ -10,6 +10,7 @@ import { notebookExists } from "./notebook-service";
 import { resolveObjectStorage } from "../storage/object-storage";
 import { inferImageExtension } from "../attachments/resource-service";
 import { getWorkspaceId } from "../auth/request-auth";
+import type { DatabaseAdapter } from "../storage/storage-contract";
 
 /**
  * Upper bounds for the files copied with one duplicated note. Each file is
@@ -239,4 +240,101 @@ export const duplicateMemoRecord = async (
   ]);
   await deleteWrittenObjects();
   throw new AppError("not_found", "Notebook not found", 404);
+};
+
+/** Why an existing note looks like the same topic as the one being created. */
+export type MemoDuplicateReason = "same_title" | "same_content";
+
+export type MemoDuplicateCandidate = {
+  id: string;
+  title: string;
+  notebookId: string;
+  updatedAt: string;
+  reason: MemoDuplicateReason;
+  /** Short body passage so a client can show the candidate without reading it. */
+  excerpt: string;
+};
+
+/** Candidate lookup for 「同题另存」; titles compare after whitespace-tolerant
+ * normalization and are bounded by `limit` (default 5). */
+export const MEMO_DUPLICATE_CANDIDATE_LIMIT = 5;
+
+export const normalizeDuplicateMemoTitle = (title: string | null | undefined) =>
+  (title ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** The same canonical form SQLite can reproduce: `lower(trim(...))` only. */
+const sqlComparableTitle = (title: string | null | undefined) =>
+  (title ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * Finds live notes that already cover the same topic: an equal normalized
+ * title, or byte-identical content. Deleted and archived notes are ignored and
+ * the caller decides what to do with the result; nothing is written here.
+ */
+export const findMemoDuplicates = async (
+  db: DatabaseAdapter,
+  workspaceId: string,
+  input: {
+    title?: string | null;
+    contentHash?: string | null;
+    excludeMemoId?: string;
+    limit?: number;
+  },
+): Promise<MemoDuplicateCandidate[]> => {
+  const limit = Math.min(Math.max(input.limit ?? MEMO_DUPLICATE_CANDIDATE_LIMIT, 1), 20);
+  const normalizedTitle = normalizeDuplicateMemoTitle(input.title);
+  const contentHash = input.contentHash ?? "";
+  if (!normalizedTitle && !contentHash) return [];
+  const excludeMemoId = input.excludeMemoId ?? "";
+  // SQL only pre-filters with the forms it can compute itself: the trimmed
+  // title in both the stored and the NFKC-normalized spelling. The exact,
+  // whitespace-insensitive comparison happens below.
+  const storedTitle = (input.title ?? "").trim().toLowerCase();
+  const rows = (await db.prepare(
+    `SELECT m.id, m.title, m.notebook_id, m.updated_at, m.excerpt, c.content_hash, c.content_text
+     FROM memos m
+     JOIN memo_contents c ON c.memo_id = m.id
+     JOIN notebooks n ON n.id = m.notebook_id AND n.workspace_id = m.workspace_id AND n.is_deleted = 0
+     WHERE m.workspace_id = ? AND m.is_deleted = 0 AND m.is_archived = 0
+       AND (? = '' OR m.id <> ?)
+       AND (lower(trim(m.title)) IN (?, ?) OR (? <> '' AND c.content_hash = ?))
+     ORDER BY m.updated_at DESC, m.id DESC
+     LIMIT ?`,
+  ).bind(
+    workspaceId,
+    excludeMemoId,
+    excludeMemoId,
+    storedTitle,
+    normalizedTitle,
+    contentHash,
+    contentHash,
+    limit * 4,
+  ).all<{
+    id: string;
+    title: string | null;
+    notebook_id: string;
+    updated_at: string;
+    excerpt: string | null;
+    content_hash: string;
+    content_text: string | null;
+  }>()).results;
+  const candidates: MemoDuplicateCandidate[] = [];
+  for (const row of rows) {
+    const sameTitle = Boolean(normalizedTitle)
+      && (normalizeDuplicateMemoTitle(row.title) === normalizedTitle
+        || sqlComparableTitle(row.title) === sqlComparableTitle(input.title));
+    const sameContent = Boolean(contentHash) && row.content_hash === contentHash;
+    if (!sameTitle && !sameContent) continue;
+    candidates.push({
+      id: row.id,
+      title: row.title ?? "",
+      notebookId: row.notebook_id,
+      updatedAt: row.updated_at,
+      reason: sameTitle ? "same_title" : "same_content",
+      // Same fallback as the memo list: stored excerpt, then the indexed body text.
+      excerpt: row.excerpt || createExcerpt(row.content_text ?? ""),
+    });
+    if (candidates.length >= limit) break;
+  }
+  return candidates;
 };

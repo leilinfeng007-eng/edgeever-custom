@@ -1,7 +1,11 @@
 import { mergeAttributes, Node } from "@tiptap/core";
 import type { TiptapDoc, TiptapMark, TiptapNode, TiptapTextNode } from "./content";
 import { resolveAttachmentKind } from "./attachment-kind";
-import { getAttachmentFilenameFromLabel, resourceLinkToMarkdown } from "./resource-links";
+import {
+  getAttachmentFilenameFromLabel,
+  isAttachmentSummaryLink,
+  resourceLinkToMarkdown,
+} from "./resource-links";
 import { normalizeAttachmentByteSize } from "./attachment-metadata";
 import { decodeString } from "micromark-util-decode-string";
 
@@ -13,11 +17,14 @@ export type FileDisplayMode = (typeof FILE_DISPLAY_MODES)[number];
 export const resolveFileDisplayMode = (value: unknown): FileDisplayMode =>
   value === "compact" ? "compact" : "inline";
 
-const MARKDOWN_LINK_PATTERN = /^\[((?:\\.|[^[\]\\])+)\]\(([^\s)]+)(?:\s+"[^"]*")?\)/;
+const MARKDOWN_LINK_PATTERN = /^\[((?:\\.|[^[\]\\])+)\]\(([^\s)]+)(?:\s+"((?:\\.|[^"\\])*)")?\)/;
 const ATTACHMENT_LABEL_PATTERN = /^\s*(?:附件[：:]|Attachment:)\s*/i;
 const RESOURCE_URL_PATTERN = /(?:\/api\/v1\/resources\/|edgeever-(?:resource|staged):\/\/)/i;
 
 export const isFileAttachmentLink = (label: string, url: string) => {
+  // Attachment-summary rows stay ordinary links so they never render a card
+  // with their own source editor inside the summary section.
+  if (isAttachmentSummaryLink(url)) return false;
   if (resolveAttachmentKind(null, getAttachmentFilenameFromLabel(label)) === "pdf" || resolveAttachmentKind(null, url) === "pdf") {
     return false;
   }
@@ -71,6 +78,18 @@ export const FileAttachment = Node.create({
           return displayMode === "compact" ? { "data-file-display-mode": displayMode } : {};
         },
       },
+      /**
+       * 来源描述（`formatAttachmentSource` 的文本），空字符串表示未知。
+       * Markdown 里对应链接 title；旧笔记没有 title 时保持空字符串。
+       */
+      source: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-file-source") || "",
+        renderHTML: (attributes) => {
+          const source = typeof attributes.source === "string" ? attributes.source.trim() : "";
+          return source ? { "data-file-source": source } : {};
+        },
+      },
     };
   },
 
@@ -99,12 +118,17 @@ export const FileAttachment = Node.create({
         mimeType: "",
         byteSize: null,
         displayMode: "inline",
+        source: token.source || "",
       },
     };
   },
 
   renderMarkdown: (node) =>
-    resourceLinkToMarkdown(String(node.attrs?.label || "Attachment"), String(node.attrs?.url || "")),
+    resourceLinkToMarkdown(
+      String(node.attrs?.label || "Attachment"),
+      String(node.attrs?.url || ""),
+      typeof node.attrs?.source === "string" ? node.attrs.source : null,
+    ),
 
   markdownTokenizer: {
     name: FILE_ATTACHMENT_NODE_TYPE,
@@ -122,6 +146,8 @@ export const FileAttachment = Node.create({
         raw: match[0],
         label,
         url: match[2],
+        // 链接 title 承载来源描述；没有 title 时留空，不额外输出空 title。
+        source: match[3] ? decodeString(match[3]) : "",
       };
     },
   },
@@ -136,6 +162,7 @@ const getLinkAttachmentAttrs = (link: TiptapMark | undefined, label: string) => 
     : getAttachmentFilenameFromLabel(label),
   mimeType: typeof link?.attrs?.attachmentMimeType === "string" ? link.attrs.attachmentMimeType : "",
   byteSize: normalizeAttachmentByteSize(link?.attrs?.attachmentByteSize),
+  source: typeof link?.attrs?.title === "string" ? link.attrs.title.trim() : "",
 });
 
 /** Upgrade legacy standalone attachment links while preserving ordinary web links. */

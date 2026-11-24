@@ -49,7 +49,7 @@ test("long note pages persist across tool requests and require contiguous full r
   expect(page.content+tail.content).toBe(body); expect(tail).toMatchObject({nextOffset:null,truncated:false});
   expect(await b.update_memo.execute({memoId:memo.id,contentMarkdown:body+"\n补充"})).toMatchObject({applied:true});
   const updated=await getMemoDetail(f.db,f.scope.workspaceId,memo.id);
-  expect(updated.contentMarkdown).toBe(body+"\n补充"); expect(updated.notebookId).toBe("inbox");
+  expect(updated.contentMarkdown).toBe(body+"\n补充"); expect(updated.notebookId).toBe("projects");
 }));
 
 test("built-in tools read real image bytes and every Word page with workspace and parent-note isolation",()=>fixture(async f=>{
@@ -114,7 +114,15 @@ test("saving or appending a completed reply is atomic, idempotent, scoped and pr
   const saved=await Promise.all([f.request(turn.id,{action:"create"}),f.request(turn.id,{action:"create"})]);
   for(const response of saved) expect(response.status).toBe(200);
   const results=await Promise.all(saved.map(r=>r.json())); expect(results[0].memo.id).toBe(results[1].memo.id);
-  expect(results[0].memo.contentMarkdown).toBe(answer);
+  // A new note follows the shared AI conversation template and keeps the whole
+  // answer verbatim under 结论.
+  const savedBody=results[0].memo.contentMarkdown;
+  expect(savedBody).toStartWith("## 结论\n\n");
+  expect(savedBody).toContain(answer);
+  expect(savedBody).toContain("## 关键步骤 / 依据");
+  expect(savedBody).toContain("## 验证结果");
+  expect(savedBody).toContain("## 来源 / 链接");
+  expect(results[0].memo.tags).toContain("AI沉淀");
   expect(f.sqlite.query("SELECT COUNT(*) n FROM memos WHERE workspace_id=?").get(f.scope.workspaceId).n).toBe(1);
   const target=await f.create("原始文字\n\n![原图](/api/v1/resources/source/blob)");
   const payload={action:"append",memoId:target.id,expectedRevision:target.revision};
@@ -122,7 +130,8 @@ test("saving or appending a completed reply is atomic, idempotent, scoped and pr
   const retry=await f.request(turn.id,payload); expect(retry.status).toBe(200); expect((await retry.json()).reused).toBe(true);
   const updated=await getMemoDetail(f.db,f.scope.workspaceId,target.id);
   expect(updated.contentMarkdown).toBe(target.contentMarkdown+"\n\n---\n\n"+answer); expect(updated.revision).toBe(target.revision+1);
-  expect(updated.notebookId).toBe("inbox");
+  // Appending to the open note keeps its explicit notebook instead of re-filing it.
+  expect(updated.notebookId).toBe("projects");
   expect((await f.request(turn.id,{action:"create"},{"x-other":"1"})).status).toBe(409);
   const changed=await f.create(); await updateMemoRecord(f.db,f.scope.workspaceId,changed.id,{contentMarkdown:"changed"},f.actor,"owner");
   expect((await f.request(turn.id,{action:"append",memoId:changed.id,expectedRevision:changed.revision})).status).toBe(409);

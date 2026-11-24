@@ -83,14 +83,50 @@ bun /path/to/edgeever/scripts/edgeever-mcp-stdio.mjs --profile personal
 
 ## 3. 将 AI 对话保存为普通笔记
 
-1. 按主题或可回查的编号搜索已有笔记。匹配明确时，读取旧笔记，传入 `expectedRevision`，补充到对应小节并保留原结构和附件引用。有多个候选笔记时，把新材料以 `autoClassify: false` 保存到「等待分类」，留待确认。
+1. 按主题或可回查的编号搜索已有笔记。匹配明确时，读取旧笔记，传入 `expectedRevision`，补充到对应小节并保留原结构和附件引用。用户点名了目标笔记且匹配唯一时，用 `save_ai_conversation` 传 `memoId` + `duplicate: "supplement"` 直接补充；同名有多条时先让用户选择。有多个候选笔记但不属于同题合并时，可把新材料保存到「等待分类」留待确认。
 2. 新建并整理笔记时，调用 `select_note_template` 按用途选模板。问题报告、会议纪要、进展复盘、阅读、灵感和目标拆解分别用 `issue`、`meeting`、`progress`、`reading`、`idea`、`goals`。混合用途用 `general`，优先使用工作区的「AI 对话通用模板」。原样保存用 `verbatim`。用户指定模板时传 `templateId`。将整理好的 Markdown 与所选模板 ID 交给 `create_memo`，可带入模板的默认标题和标签。
 3. 写入前先上传原件。图片紧跟对应段落，文档链接放在引用它的小节。供整篇查阅的材料放在文末「参考资料」。同一个文件只上传一次。写入时传入 `requireResourcePlacement: true` 可检查新增资源是否都有正文引用。
-4. 用户明确指定笔记本时传入 `notebookId`。否则新笔记进入「等待分类」，已有普通笔记更新正文后也可回到该处重新分类。无附件的完全相同内容可以复用原笔记，用户要求另存副本时传 `allowDuplicate: true`。
+4. 用户明确指定笔记本时传入 `notebookId`，笔记本优先。否则新笔记进入「等待分类」。无附件的完全相同内容可以复用原笔记，用户要求另存副本时传 `allowDuplicate: true`。
 
-Docker 或其他 Bun 自托管部署的后台归类使用 EdgeEver 配置的默认模型。它参考标题、正文、已有标签和附件名，在现有笔记本中选择归属。归属不明或模型调用失败时留在「等待分类」，可以在网页上查看状态并重试。给服务设置 `EDGE_EVER_AUTO_CLASSIFY=false` 可关闭自动归类，或设置 `EDGE_EVER_AUTO_CLASSIFY_WORKSPACE` 将其限制在指定工作区。
+### 3.1 笔记归属（新建 / 更新 / 恢复）
 
-## 4. 上传本地文件
+- **新建**：指定 `notebookId` 就直接存入目标；未指定则进入「等待分类」。`autoClassify` 只决定收件箱里的新笔记是否排队，不影响显式目标。
+- **更新**：普通更新默认**留在原笔记本**，不必再传 `autoClassify: false`。需要移动时传 `notebookId`（显式目标优先）；需要重新分类时传 `autoClassify: true`，笔记会移入「等待分类」。
+- **移入与排队分开**：移入「等待分类」和「启动自动分类」是两件事。`EDGE_EVER_AUTO_CLASSIFY=false` 时仍能把笔记移入「等待分类」，只是不会创建分类任务。
+- **恢复**：优先回原笔记本；原笔记本已删除时才回「等待分类」。
+
+### 3.2 保存对话（`save_ai_conversation`）
+
+明确的对话沉淀场景使用 `save_ai_conversation`，而不是通用 `create_memo`。它复用「AI 对话通用模板」的四个章节（结论、关键步骤 / 依据、验证结果、来源 / 链接）、「对象｜主题」标题和 `AI沉淀` 标签。
+
+| 场景 | 调用 |
+|---|---|
+| 保存为新笔记 | `{"message":"…","response":"…","object":"产品发布计划"}` → 进「等待分类」 |
+| 补充指定笔记（原地） | 加 `memoId` + `expectedRevision` + `duplicate:"supplement"`，可选 `section:{heading,mode}` |
+| 同题合并 | 加 `memoId` + `duplicate:"merge"`：补充后移入「等待分类」（自动分类关闭时只移动） |
+| 另存新笔记 | 候选返回后传 `duplicate:"new"` |
+| 重新分类 | 普通笔记更新时传 `autoClassify:true`，或保存对话时 `duplicate:"merge"` |
+
+标题已有同题笔记时返回 `duplicate_match_found`，`error.candidates` 含 `memoId`、`title`、`notebookId`、`excerpt`（该笔记的简短正文片段，与笔记列表同一摘要来源），供客户端展示「补充已有／另存新笔记」。候选只是读取结果，返回候选时不会写入任何笔记；只有用户选定后才产生一次写入。
+
+## 4. 章节更新与并发保护
+
+- 优先用 `update_memo` 的 `sectionOperations`：`append` 追加到该章节、`replace` 只替换该章节，其余正文和附件引用保持不变。不要为了改一处而重写全文。
+- 章节缺失返回 `section_not_found`，标题重名返回 `section_ambiguous`，两者都带 `availableHeadings`，笔记不会被改动；据返回的章节重新定位，不要退回全文重写。
+- 传 `expectedRevision` 做并发保护；冲突返回 `revision_conflict` 并附带 `currentRevision`、`notebookId`、`title`，重新读取后再改。
+- 追加和同题补充可传可选 `idempotencyKey`：同一次请求超时重试只生效一次。用户日后有意追加相同文字时，换一个 key 或省略它。
+
+## 5. 附件：来源、插入与汇总
+
+完整流程是「上传 → 插入指定位置 → 设置或修改来源 → 更新汇总 → 读回核对」：
+
+1. 用 `upload_memo_attachment`（≤2 MiB，可带 `source`）、`stage_memo_resource` 或 `create_resource_upload_url` 上传。
+2. 用 `insert_memo_resource` 按章节（`anchor:{section,position}`）或正文锚点（`afterText` / `beforeText`）插入；定位失败返回 `section_not_found` / `section_ambiguous` / `anchor_not_found`，不回退到文末。
+3. 用 `set_attachment_source` 设置或修改来源，复用同一套格式（`文件名 · P.3-5 · 章节：X · 工作表：X · 范围：A1:C9 · url · 说明：X`），支持页码、章节、工作表与范围；`source: null` 清除来源。
+4. 用 `update_attachment_summary`（传 `expectedRevision`）更新「附件汇总」。正文附件卡片保留，文末每个附件只显示一条链接和最新来源；重复调用幂等。
+5. 用 `get_memo` / `list_memo_resources` 读回核对正文与来源。
+
+## 6. 上传本地文件
 
 使用 `stage_memo_resource` 可以通过 MCP 直接上传不超过 2 MiB 的图片或文档原件。传入 `kind`、`filename`、`mimeType` 和 `dataBase64`，结果包含待绑定的 `resourceId` 与可插入的 Markdown。文件更大或客户端只能提供本地路径时，使用一次性上传 URL：
 
@@ -100,7 +136,9 @@ Docker 或其他 Bun 自托管部署的后台归类使用 EdgeEver 配置的默�
 
 每个 URL 只接受一个与声明大小和类型完全一致的文件，最大 100 MiB，有效期 15 分钟。大小或类型不符的请求会被拒绝，但不会消耗该 URL；重复一次已成功的上传会返回相同的 `resourceId`。创建它的 Token 被撤销或失去 `write:resources` 权限后，URL 也随之失效。上传后 24 小时内未绑定到笔记的文件会被删除。每个工作区最多同时保留 20 个未使用的 URL 和 100 个未绑定文件（共 1 GiB）。绑定文件需要 `write:resources` 权限。
 
-## 5. 排障
+Docker 或其他 Bun 自托管部署的后台归类使用 EdgeEver 配置的默认模型。它参考标题、正文、已有标签和附件名，在现有笔记本中选择归属。归属不明或模型调用失败时留在「等待分类」，可以在网页上查看状态并重试。给服务设置 `EDGE_EVER_AUTO_CLASSIFY=false` 可关闭自动归类，或设置 `EDGE_EVER_AUTO_CLASSIFY_WORKSPACE` 将其限制在指定工作区。关闭后仍可用 `autoClassify: true` 把笔记移入「等待分类」，只是不会创建分类任务。
+
+## 7. 排障
 
 | 现象 | 原因与处理 |
 |---|---|
@@ -115,7 +153,7 @@ Docker 或其他 Bun 自托管部署的后台归类使用 EdgeEver 配置的默�
 
 较旧的实例可能对缺少凭据和 Token 被拒绝返回相同的通用 `401`。先核对实例地址、请求头和 Token。
 
-## 6. 自定义版内置助手与分类界面
+## 8. 自定义版内置助手与分类界面
 
 网页右侧的内置助手与外部 MCP 共用笔记和附件服务，不需要本机 ACP。点击「引用当前笔记」后，输入框上方显示可移除的笔记引用；选区和上传文件保留各自的移除入口。未引用正文时，当前笔记仅提供定位信息，助手按问题需要调用读取工具。
 

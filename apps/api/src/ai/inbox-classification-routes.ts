@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import type { AppContext, AppEnv } from "../api-context";
 import { apiError } from "../common/http-errors";
-import { classificationTags, canClassifyInbox, getDestinations, getInboxClassificationStatus } from "./inbox-classification";
+import { classificationTags, canClassifyInbox, getDestinations, getInboxClassificationStatus, kickInboxClassification } from "./inbox-classification";
 import { getMemoDetail, updateMemoRecord } from "../notes/memo-service";
 import { inboxNotebookIdentitySql } from "../notes/notebook-service";
 import { getActorLabel, getAuditActor, getWorkspaceId, requireUser } from "../auth/request-auth";
@@ -43,7 +43,10 @@ export function registerInboxClassificationRoutes(app: Hono<AppEnv>) {
         claim_token = NULL, outcome = NULL, destination_id = NULL, reason = NULL, result_revision = NULL, suggested_tags = NULL
       WHERE inbox_classification_jobs.status NOT IN ('pending','running')
     `).bind(c.req.param("id"), workspaceId).run();
-    return result.meta.changes ? c.json({ ok: true }, 202) : conflict(c);
+    if (!result.meta.changes) return conflict(c);
+    // Start the first attempt now; cron still retries anything this misses.
+    kickInboxClassification(c);
+    return c.json({ ok: true }, 202);
   });
 
   app.post("/api/v1/inbox-classification/:id/:action", async (c) => {

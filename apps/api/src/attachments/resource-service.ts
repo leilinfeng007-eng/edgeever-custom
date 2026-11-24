@@ -1,8 +1,13 @@
 import {
+  ATTACHMENT_SOURCE_METADATA_KEY,
   SUPPORTED_IMAGE_MIME_TYPES,
   isPdfAttachment,
+  normalizeAttachmentSource,
+  parseResourceMetadata,
+  readAttachmentSourceFromMetadata,
   resolvePlayableMediaMimeType,
   setSvgResourceSecurityHeaders,
+  type AttachmentSource,
   type Resource,
   type ResourceListItem,
   type ResourceStorageSummary,
@@ -36,6 +41,8 @@ export type ResourceRow = {
   sha256: string | null;
   width: number | null;
   height: number | null;
+  /** 原始 metadata；来源对象在 `origin` 键下，与既有的 `source` 字符串并存。 */
+  metadata_json?: string | null;
   created_at: string;
   updated_at: string;
   is_deleted?: number;
@@ -78,6 +85,8 @@ export const mapResource = (row: ResourceRow): Resource => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   url: `/api/v1/resources/${row.id}/blob`,
+  // 来源只读 `metadata.origin`；没有就是 null（前端显示“来源未提供”）。
+  source: readAttachmentSourceFromMetadata(row.metadata_json),
 });
 
 export const mapResourceListItem = (row: ResourceListRow): ResourceListItem => ({
@@ -95,6 +104,21 @@ export const mapResourceStorageSummary = (
   imageCount: row?.image_count ?? 0,
   attachmentCount: row?.attachment_count ?? 0,
 });
+
+/**
+ * 只替换 `metadata.origin`：其余 metadata 字段（例如 image 的 source/压缩信息）
+ * 原样保留；`source` 为 null 表示清除来源。
+ */
+export const mergeAttachmentSourceMetadata = (
+  metadataJson: string | null | undefined,
+  source: AttachmentSource | null | undefined,
+): string => {
+  const metadata = { ...parseResourceMetadata(metadataJson) };
+  const origin = normalizeAttachmentSource(source);
+  if (origin) metadata[ATTACHMENT_SOURCE_METADATA_KEY] = origin;
+  else delete metadata[ATTACHMENT_SOURCE_METADATA_KEY];
+  return JSON.stringify(metadata);
+};
 
 export const validateImageUpload = (mimeType: string, size: number) => {
   if (!SUPPORTED_IMAGE_MIME_TYPES.has(mimeType)) {
@@ -202,7 +226,7 @@ export const getResourceRow = async (
   database
     .prepare(
       `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.mime_type,
-              r.filename, r.byte_size, r.sha256, r.width, r.height, r.created_at, r.updated_at, r.is_deleted
+              r.filename, r.byte_size, r.sha256, r.width, r.height, r.metadata_json, r.created_at, r.updated_at, r.is_deleted
        FROM resources r
        INNER JOIN memos m ON m.id = r.memo_id
        WHERE r.id = ? AND m.workspace_id = ?${includeDeleted ? "" : " AND r.is_deleted = 0"}
@@ -219,7 +243,7 @@ export const listResourcesForMemo = async (
   const rows = await database
     .prepare(
       `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind, r.mime_type,
-              r.filename, r.byte_size, r.sha256, r.width, r.height, r.created_at, r.updated_at
+              r.filename, r.byte_size, r.sha256, r.width, r.height, r.metadata_json, r.created_at, r.updated_at
        FROM resources r
        INNER JOIN memos m ON m.id = r.memo_id
        WHERE r.memo_id = ? AND m.workspace_id = ? AND r.is_deleted = 0
@@ -239,7 +263,7 @@ export const listResourcesForMcp = async (
   const [rows, stats] = await Promise.all([
     database.prepare(
       `SELECT r.id, r.memo_id, r.original_memo_id, r.bucket_name, r.object_key, r.storage_config_id, r.kind,
-              r.mime_type, r.filename, r.byte_size, r.sha256, r.width, r.height,
+              r.mime_type, r.filename, r.byte_size, r.sha256, r.width, r.height, r.metadata_json,
               r.created_at, r.updated_at, m.title AS memo_title, m.excerpt AS memo_excerpt,
               m.is_deleted AS memo_is_deleted
        FROM resources r
@@ -273,6 +297,11 @@ type ResourceCreateInput = {
   bytes: Uint8Array;
   actor: AuditActor;
   metadata?: Record<string, unknown>;
+  /**
+   * 显式声明的附件来源，写入 `metadata.origin`。
+   * 缺省表示「来源未提供」，不猜测页码或章节。
+   */
+  origin?: AttachmentSource | null;
   afterStore?: PreparedStatementAdapter[];
   /**
    * The note's workspace. Required on routes without a signed-in user, such
@@ -296,9 +325,12 @@ const storeResource = async (
   const now = isoNow();
   const workspaceId = input.workspaceId ?? getWorkspaceId(context);
   const filename = normalizeFilename(input.filename) || `${resourceId}${input.objectKeyExtension ?? ""}`;
-  const metadata = input.kind === "attachment"
+  const baseMetadata = input.kind === "attachment"
     ? { ...input.metadata, originalFilename: filename }
-    : input.metadata;
+    : (input.metadata ?? {});
+  // 来源单独放在 origin 键下，既有的 metadata.source（"upload"|"mcp"）保持不变。
+  const origin = normalizeAttachmentSource(input.origin);
+  const metadata = origin ? { ...baseMetadata, [ATTACHMENT_SOURCE_METADATA_KEY]: origin } : baseMetadata;
   const objectKey = `workspaces/${workspaceId}/memos/${input.memoId}/${resourceId}${input.objectKeyExtension ?? ""}`;
   const destination = await resolveObjectStorage(context.env);
   const checksum = await sha256Bytes(input.bytes);

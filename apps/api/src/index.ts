@@ -103,6 +103,7 @@ import { registerSyncRoutes } from "./sync/sync-routes";
 import { registerMemoRoutes } from "./notes/memo-routes";
 import { registerAttachmentContentRoute } from "./attachments/attachment-content-routes";
 import { registerInboxClassificationRoutes } from "./ai/inbox-classification-routes";
+import { drainInboxClassification } from "./ai/inbox-classification";
 import { registerScheduledTaskRoutes } from "./tasks/scheduled-task-routes";
 import { registerWorkspaceExtensionRoutes } from "./plugins/workspace-extension-routes";
 import { registerBackupRoutes } from "./backup/backup-routes";
@@ -130,6 +131,7 @@ import {
   registerUserRoutes,
 } from "./auth/user-routes";
 import { registerNotebookRoutes } from "./notes/notebook-routes";
+import { registerNoteCategoryRoutes } from "./workspace/note-category-routes";
 import { registerNotebookShareRoutes, registerPublicNotebookShareRoutes } from "./notes/notebook-share-routes";
 import { isNotebookSitePagePath, renderNotebookSitePage } from "./notes/notebook-site-page";
 import { isPublicMemoSharePagePath, renderPublicMemoSharePage } from "./notes/share-page";
@@ -149,8 +151,10 @@ import {
   createAttachmentResource,
   createImageResource,
   getResourceRow,
+  listResourcesForMemo,
   replaceResourceContent,
 } from "./attachments/resource-service";
+import { registerAttachmentSummaryRoutes } from "./attachments/attachment-summary-routes";
 
 // Compatibility aliases keep the existing SQL-heavy implementation small
 // while routing its dependency through the platform-neutral contract above.
@@ -366,9 +370,11 @@ registerAiPromptRoutes(app, {
 registerApiTokenRoutes(app, {
   sha256: (...args) => sha256(...args),
 });
-registerNotebookRoutes(app, async (env) => {
+const prepareDemoData = async (env: Bindings) => {
   if (isDemoMode(env)) await ensureDemoSeed(env);
-});
+};
+registerNotebookRoutes(app, prepareDemoData);
+registerNoteCategoryRoutes(app, { prepareDemoData });
 
 registerSyncRoutes(app, {
   clampNumber: (...args) => clampNumber(...args),
@@ -424,6 +430,11 @@ registerMcpRoutes(app, {
 
 
 registerPublishImageRoutes(app);
+registerAttachmentSummaryRoutes(app, {
+  getMemoDetail,
+  listResourcesForMemo,
+  updateMemoRecord,
+});
 registerResourceRoutes(app, {
   clampNumber: (...args) => clampNumber(...args),
   createAttachmentResource: (...args) => createAttachmentResource(...args),
@@ -522,11 +533,20 @@ const worker = {
       storage: createCloudflareStorageAdapter(env),
     } as Bindings;
 
-    if (!isDemoMode(runtimeEnv)) {
+    // Demo reset and automatic filing are mutually exclusive: a reset deletes
+    // every memo the classifier might be claiming, so never run both.
+    if (isDemoMode(runtimeEnv)) {
+      ctx.waitUntil(resetDemoData(runtimeEnv, controller.scheduledTime, { resetCredentials: true }));
       return;
     }
 
-    ctx.waitUntil(resetDemoData(runtimeEnv, controller.scheduledTime, { resetCredentials: true }));
+    // Cron is the durable trigger: it runs with the site closed and no HTTP
+    // request alive. drainInboxClassification bounds the batch and deadline so
+    // one tick cannot exhaust the Worker CPU or D1 read budget.
+    ctx.waitUntil(
+      drainInboxClassification(runtimeEnv, { budgetMs: 20_000 })
+        .catch((error) => console.error("[inbox-classification] scheduled drain failed", error)),
+    );
   },
 };
 

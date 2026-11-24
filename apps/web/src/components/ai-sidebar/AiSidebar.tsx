@@ -7,8 +7,10 @@ import { Link } from "react-router";
 import { WORKSPACE_SETTINGS_PATH } from "@/hooks/useWorkspaceRoute";
 import { ArrowUp, Download, FileText, Loader2, PanelRightClose, Plus, Sparkles, X } from "lucide-react";
 import type { CompanionAction, CompanionAnswer, CompanionEvent, CompanionFailureDiagnostics, CompanionTurn, CompanionTurnInput } from "@edgeever/shared";
-import { buildRevisionDiffRows, companionAdviceOnly, companionFailureDiagnostics, createMemoLinkHref } from "@edgeever/shared";
+import { buildRevisionDiffRows, companionAdviceOnly, companionFailureDiagnostics, createMemoLinkHref, listMarkdownHeadings } from "@edgeever/shared";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Attachment,
@@ -127,6 +129,53 @@ type PendingAttachment = PreparedAiAttachment & {
 };
 
 type LocalToolRow = { id: string; name: string; status: string; title?: string };
+
+/** A note the save request would duplicate; the server lists at most five. */
+type SaveDuplicateCandidate = {
+  id: string;
+  title: string;
+  notebookId: string;
+  updatedAt: string;
+  reason: "same_title" | "same_content";
+};
+
+type SaveCompanionNoteInput = {
+  action: "create" | "append";
+  duplicate?: "ask" | "supplement" | "new";
+  memoId?: string;
+  expectedRevision?: number;
+  expectedContentHash?: string;
+  title?: string;
+  tags?: string[];
+  section?: { heading: string; mode: "append" | "replace" };
+};
+
+/** Picker value for 「文末」: no section, the answer is appended to the end. */
+const SECTION_END = "__note_end__";
+
+/** The generated client type predates 同题补充, and the endpoint is backwards compatible. */
+const saveCompanionNote = (turnId: string, input: SaveCompanionNoteInput) =>
+  (api.saveCompanionResponse as unknown as (
+    id: string,
+    payload: SaveCompanionNoteInput,
+  ) => Promise<{ memo: { id: string; notebookId: string; title: string | null }; reused: boolean }>)(turnId, input);
+
+const duplicateCandidatesFrom = (details: unknown): SaveDuplicateCandidate[] => {
+  const list = (details as { candidates?: unknown } | null | undefined)?.candidates;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as Partial<SaveDuplicateCandidate>;
+    if (typeof candidate.id !== "string" || !candidate.id) return [];
+    return [{
+      id: candidate.id,
+      title: typeof candidate.title === "string" ? candidate.title : "",
+      notebookId: typeof candidate.notebookId === "string" ? candidate.notebookId : "",
+      updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+      reason: candidate.reason === "same_content" ? "same_content" as const : "same_title" as const,
+    }];
+  });
+};
 
 type LocalImage = { id: string; mediaType: string; base64: string };
 
@@ -772,6 +821,13 @@ function AiSidebarSession({
   const [includeCurrentNote, setIncludeCurrentNote] = useState(false);
   const [adviceOnly, setAdviceOnly] = useState(false);
   const [savedReplies, setSavedReplies] = useState<Record<string, { id: string; notebookId: string; title: string | null }>>({});
+  /** 同题候选：the user decides between supplementing and saving separately. */
+  const [duplicateChoice, setDuplicateChoice] = useState<{ turn: CompanionTurn; candidates: SaveDuplicateCandidate[] } | null>(null);
+  /** Section picker for 「追加到当前笔记」, filled from the open note's headings. */
+  const [sectionForm, setSectionForm] = useState<{ turn: CompanionTurn; memoId: string; revision: number; headings: string[] } | null>(null);
+  const [sectionHeading, setSectionHeading] = useState(SECTION_END);
+  const [sectionMode, setSectionMode] = useState<"append" | "replace">("append");
+  const [savingTurnId, setSavingTurnId] = useState<string | null>(null);
   const [composerFocusToken, setComposerFocusToken] = useState(0);
   const [selectionTurnKinds, setSelectionTurnKinds] = useState<Record<string, "explain" | "translate">>(readSelectionTurnKinds);
   const alive = useRef(true);
@@ -816,6 +872,13 @@ function AiSidebarSession({
     if (code === "companion_memory_conflict") return t("companion.conflict");
     if (code === "companion_history_full") return t("companion.historyFull");
     if (code === "companion_action_conflict") return t("aiAssistant.sidebar.proposalConflict");
+    if (code === "duplicate_match_found") return t("assistantWorkspace.duplicateDescription");
+    if (code === "section_not_found") return t("assistantWorkspace.sectionNotFound");
+    if (code === "section_ambiguous") return t("assistantWorkspace.sectionAmbiguous");
+    if (code === "companion_append_unsupported") return t("assistantWorkspace.appendUnsupported");
+    if (code === "revision_conflict" || code === "content_conflict" || code === "edit_session_conflict") {
+      return t("assistantWorkspace.noteChanged");
+    }
     if (code === "companion_action_unsynced") return t("companion.actions.unsynced");
     if (code === "companion_busy") return t("companion.recovered");
     if (cause instanceof ApiRequestError && cause.status === 403) return t("aiAssistant.sidebar.unavailable");
@@ -1578,46 +1641,168 @@ function AiSidebarSession({
     );
   };
 
-  const saveReply = async (turn: CompanionTurn, action: "create" | "append") => {
-    if (locked.current || acting) return;
-    const targetId = memoId;
-    if (action === "append" && !targetId) return;
+  const saveReply = async (turn: CompanionTurn, input: SaveCompanionNoteInput) => {
+    if (locked.current) return;
     locked.current = true;
     setActing(true);
+    setSavingTurnId(turn.id);
     setError(null);
     try {
       await beforeCompanionApply?.();
-      const current = action === "append" ? (await api.getMemo(targetId!)).memo : null;
-      const result = await api.saveCompanionResponse(turn.id, { action,
-        ...(current ? { memoId: current.id, expectedRevision: current.revision } : {}),
-      });
-      if (alive.current) setSavedReplies(previous => ({ ...previous, [turn.id]: result.memo }));
+      const result = await saveCompanionNote(turn.id, input);
+      if (alive.current) {
+        setSavedReplies(previous => ({ ...previous, [turn.id]: result.memo }));
+        setDuplicateChoice(null);
+        setSectionForm(null);
+      }
       await onCompanionNotesChanged?.();
     } catch (cause) {
+      // A note about the same topic exists: the server wrote nothing yet, so the
+      // user chooses between supplementing it and saving a separate note.
+      if (cause instanceof ApiRequestError && cause.code === "duplicate_match_found") {
+        const candidates = duplicateCandidatesFrom(cause.details);
+        if (alive.current) setDuplicateChoice({ turn, candidates });
+        return;
+      }
       if (alive.current) setError(explainError(cause));
     } finally {
       locked.current = false;
-      if (alive.current) setActing(false);
+      if (alive.current) {
+        setActing(false);
+        setSavingTurnId(null);
+      }
+    }
+  };
+
+  /** Reads the open note so the picker offers its real headings, plus 「文末」. */
+  const openSectionForm = async (turn: CompanionTurn) => {
+    const targetId = memoId;
+    if (!targetId || locked.current || acting) return;
+    setError(null);
+    try {
+      const current = (await api.getMemo(targetId)).memo;
+      if (!alive.current) return;
+      setSectionHeading(SECTION_END);
+      setSectionMode("append");
+      setSectionForm({
+        turn,
+        memoId: current.id,
+        revision: current.revision,
+        headings: [...new Set(listMarkdownHeadings(current.contentMarkdown).map(heading => heading.title))],
+      });
+    } catch (cause) {
+      if (alive.current) setError(explainError(cause));
+    }
+  };
+
+  const confirmSection = (form: NonNullable<typeof sectionForm>) => {
+    void saveReply(form.turn, {
+      action: "append",
+      memoId: form.memoId,
+      expectedRevision: form.revision,
+      ...(sectionHeading === SECTION_END ? {} : { section: { heading: sectionHeading, mode: sectionMode } }),
+    });
+  };
+
+  /** 补充已有笔记 always targets the note's latest revision. */
+  const supplementCandidate = async (turn: CompanionTurn, candidate: SaveDuplicateCandidate) => {
+    if (locked.current) return;
+    setError(null);
+    try {
+      const current = (await api.getMemo(candidate.id)).memo;
+      await saveReply(turn, {
+        action: "create", duplicate: "supplement",
+        memoId: current.id, expectedRevision: current.revision,
+      });
+    } catch (cause) {
+      if (alive.current) setError(explainError(cause));
     }
   };
 
   const renderReplyActions = (turn: CompanionTurn) => {
     if (turn.status !== "completed" || !turn.response.trim()) return null;
     const saved = savedReplies[turn.id];
-    return <div className="mt-2 flex flex-wrap items-center gap-1.5">
-      <Button type="button" size="sm" variant="outline" disabled={running || acting} onClick={() => void saveReply(turn, "create")}>
-        {t("assistantWorkspace.saveNew")}
-      </Button>
-      {memoId ? <Button type="button" size="sm" variant="outline" disabled={running || acting} onClick={() => void saveReply(turn, "append")}>
-        {t("assistantWorkspace.append")}
-      </Button> : null}
-      {selectionPin && !selectionTurnKinds[turn.id] ? <Button type="button" size="sm" variant="outline" disabled={running || acting}
-        onClick={() => { if (!onReplaceSelection?.(turn.response)) setError(t("assistantWorkspace.selectionChanged")); }}>
-        {t("assistantWorkspace.replaceSelection")}
-      </Button> : null}
-      {saved ? <a className="text-xs underline" href={createMemoLinkHref(saved.id)} onClick={event => {
-        event.preventDefault(); event.stopPropagation(); onOpenCompanionNote?.(saved.id, saved.notebookId);
-      }}>{t("assistantWorkspace.saved", { name: saved.title || t("common.untitledMemo") })}</a> : null}
+    const busy = running || acting;
+    const saving = savingTurnId === turn.id;
+    const duplicate = duplicateChoice?.turn.id === turn.id ? duplicateChoice : null;
+    const section = sectionForm?.turn.id === turn.id ? sectionForm : null;
+    return <div className="mt-2 space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void saveReply(turn, { action: "create", duplicate: "ask" })}>
+          {saving ? t("assistantWorkspace.saving") : t("assistantWorkspace.saveNew")}
+        </Button>
+        {memoId ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void openSectionForm(turn)}>
+          {t("assistantWorkspace.append")}
+        </Button> : null}
+        {selectionPin && !selectionTurnKinds[turn.id] ? <Button type="button" size="sm" variant="outline" disabled={busy}
+          onClick={() => { if (!onReplaceSelection?.(turn.response)) setError(t("assistantWorkspace.selectionChanged")); }}>
+          {t("assistantWorkspace.replaceSelection")}
+        </Button> : null}
+        {saved ? <a className="text-xs underline" href={createMemoLinkHref(saved.id)} onClick={event => {
+          event.preventDefault(); event.stopPropagation(); onOpenCompanionNote?.(saved.id, saved.notebookId);
+        }}>{t("assistantWorkspace.saved", { name: saved.title || t("common.untitledMemo") })}</a> : null}
+      </div>
+      {section ? <div className="space-y-2 rounded-md border border-slate-200 p-2">
+        <p className="text-xs font-medium text-slate-700">{t("assistantWorkspace.sectionTitle")}</p>
+        <Select value={sectionHeading} onValueChange={setSectionHeading}>
+          <SelectTrigger aria-label={t("assistantWorkspace.sectionTitle")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={SECTION_END}>{t("assistantWorkspace.sectionEnd")}</SelectItem>
+            {section.headings.map((heading) => <SelectItem key={heading} value={heading}>{heading}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {sectionHeading === SECTION_END ? null : <Select value={sectionMode}
+          onValueChange={(value) => setSectionMode(value === "replace" ? "replace" : "append")}>
+          <SelectTrigger aria-label={t("assistantWorkspace.sectionMode")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="append">{t("assistantWorkspace.sectionAppend")}</SelectItem>
+            <SelectItem value="replace">{t("assistantWorkspace.sectionReplace")}</SelectItem>
+          </SelectContent>
+        </Select>}
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" disabled={busy} onClick={() => confirmSection(section)}>
+            {saving ? t("assistantWorkspace.saving") : t("assistantWorkspace.sectionConfirm")}
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setSectionForm(null)}>
+            {t("common.cancel")}
+          </Button>
+        </div>
+      </div> : null}
+      {duplicate ? <Dialog open onOpenChange={(open) => { if (!open) setDuplicateChoice(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("assistantWorkspace.duplicateTitle")}</DialogTitle>
+            <DialogDescription>{t("assistantWorkspace.duplicateDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {duplicate.candidates.length === 0
+              ? <p className="text-xs text-slate-500">{t("assistantWorkspace.duplicateEmpty")}</p>
+              : duplicate.candidates.map((candidate) => (
+                <div key={candidate.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 p-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-slate-800">{candidate.title || t("common.untitledMemo")}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {t(candidate.reason === "same_content" ? "assistantWorkspace.duplicateSameContent" : "assistantWorkspace.duplicateSameTitle")}
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" disabled={busy}
+                    onClick={() => void supplementCandidate(turn, candidate)}>
+                    {t("assistantWorkspace.duplicateSupplement")}
+                  </Button>
+                </div>
+              ))}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" size="sm" disabled={busy}
+              onClick={() => void saveReply(turn, { action: "create", duplicate: "new" })}>
+              {t("assistantWorkspace.duplicateNew")}
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setDuplicateChoice(null)}>
+              {t("common.cancel")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog> : null}
     </div>;
   };
 

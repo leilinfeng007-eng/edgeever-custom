@@ -1,4 +1,8 @@
 import { resolveSupportedLocale } from "./i18n/locales";
+import {
+  AI_CONVERSATION_TEMPLATE_MARKDOWN,
+  AI_CONVERSATION_TEMPLATE_NAME,
+} from "./note-workflow";
 
 export type MemoTemplateSeedLocale = "zh-CN" | "zh-TW" | "en-US" | "ja" | "pl" | "ru" | "es" | "de" | "fr";
 
@@ -9,11 +13,28 @@ export type MemoTemplateSeedTranslation = {
 };
 
 export type MemoTemplateSeed = {
-  key: "quick-note" | "meeting" | "weekly-review" | "reading" | "okr";
-  translationKey: "quickNote" | "meeting" | "weeklyReview" | "reading" | "okr";
+  key: "quick-note" | "meeting" | "weekly-review" | "reading" | "okr" | "ai-conversation";
+  translationKey: "quickNote" | "meeting" | "weeklyReview" | "reading" | "okr" | "aiConversation";
   tag: string;
   translations: Record<MemoTemplateSeedLocale, MemoTemplateSeedTranslation>;
 };
+
+/**
+ * 同一套章节结构的各语言版本。zh-CN 直接用共享契约里的正文，
+ * 其他语言只翻译标题，保证结构（章节顺序与数量）始终一致。
+ */
+const aiConversationMarkdown = (
+  headings: readonly [string, string, string, string],
+): string => [
+  `## ${headings[0]}`,
+  "",
+  `## ${headings[1]}`,
+  "",
+  `## ${headings[2]}`,
+  "",
+  `## ${headings[3]}`,
+  "",
+].join("\n");
 
 const seed = (
   metadata: Omit<MemoTemplateSeed, "translations">,
@@ -270,6 +291,56 @@ export const DEFAULT_MEMO_TEMPLATE_SEEDS: readonly MemoTemplateSeed[] = [
       title: "Décomposition des objectifs et tâches",
       description: "Définissez les objectifs OKR, résultats clés, jalons et listes de contrôle.",
       contentMarkdown: "# 🎯 Décomposition des objectifs\n\n- **Période** :\n- **Responsable** :\n\n---\n\n## 📌 Objectif (Objective)\n\n> \n\n## 📈 Résultats clés (Key Results)\n\n- **KR 1** : Indicateur cible -> Progression actuelle\n- **KR 2** : Indicateur cible -> Progression actuelle\n\n## 🗓️ Jalons (Milestones)\n\n- [ ] **Étape 1 (Date)** : Objectif de l'étape\n- [ ] **Étape 2 (Date)** : Objectif de l'étape\n\n## 📋 Liste des tâches\n\n- [ ] \n- [ ] \n",
+    },
+  ),
+  // 「同题补充／另存」写入的默认结构：结论、依据、验证与来源各有固定章节，
+  // 名称与标签来自 note-workflow 的共享契约，其他入口不应再自定义一套。
+  seed(
+    { key: "ai-conversation", translationKey: "aiConversation", tag: "ai-conversation" },
+    {
+      title: AI_CONVERSATION_TEMPLATE_NAME,
+      description: "沉淀与 AI 的对话结论：结论、关键步骤与依据、验证结果、来源链接。",
+      contentMarkdown: AI_CONVERSATION_TEMPLATE_MARKDOWN,
+    },
+    {
+      title: "AI 對話通用範本",
+      description: "沉澱與 AI 的對話結論：結論、關鍵步驟與依據、驗證結果、來源連結。",
+      contentMarkdown: aiConversationMarkdown(["結論", "關鍵步驟 / 依據", "驗證結果", "來源 / 連結"]),
+    },
+    {
+      title: "AI Conversation Template",
+      description: "Keep the outcome of an AI conversation: conclusion, key steps and evidence, verification, and sources.",
+      contentMarkdown: aiConversationMarkdown(["Conclusion", "Key Steps / Evidence", "Verification", "Sources / Links"]),
+    },
+    {
+      title: "AI 会話テンプレート",
+      description: "AI との会話の結論を残します：結論、根拠、検証結果、出典リンク。",
+      contentMarkdown: aiConversationMarkdown(["結論", "根拠と手順", "検証結果", "出典 / リンク"]),
+    },
+    {
+      title: "Szablon rozmowy z AI",
+      description: "Zapisuj wnioski z rozmowy z AI: wniosek, kluczowe kroki i dowody, weryfikacja oraz źródła.",
+      contentMarkdown: aiConversationMarkdown(["Wniosek", "Kluczowe kroki / dowody", "Weryfikacja", "Źródła / linki"]),
+    },
+    {
+      title: "Шаблон диалога с ИИ",
+      description: "Сохраняйте итоги разговора с ИИ: вывод, ключевые шаги и основания, проверка и источники.",
+      contentMarkdown: aiConversationMarkdown(["Вывод", "Ключевые шаги / основания", "Проверка", "Источники / ссылки"]),
+    },
+    {
+      title: "Plantilla de conversación con IA",
+      description: "Guarde las conclusiones de una conversación con IA: conclusión, pasos y evidencias, verificación y fuentes.",
+      contentMarkdown: aiConversationMarkdown(["Conclusión", "Pasos / evidencias clave", "Verificación", "Fuentes / enlaces"]),
+    },
+    {
+      title: "KI-Gesprächsvorlage",
+      description: "Ergebnisse eines KI-Gesprächs festhalten: Fazit, wichtige Schritte und Belege, Prüfung und Quellen.",
+      contentMarkdown: aiConversationMarkdown(["Fazit", "Wichtige Schritte / Belege", "Prüfung", "Quellen / Links"]),
+    },
+    {
+      title: "Modèle de conversation IA",
+      description: "Conservez les conclusions d'une conversation avec l'IA : conclusion, étapes et preuves, vérification et sources.",
+      contentMarkdown: aiConversationMarkdown(["Conclusion", "Étapes / preuves clés", "Vérification", "Sources / liens"]),
     },
   ),
 ];

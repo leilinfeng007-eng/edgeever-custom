@@ -157,6 +157,7 @@ import {
   pluginEmbedToMarkdown,
   wrapDetailsContentHtml,
   isPdfAttachment,
+  formatAttachmentSource,
   resolveMemoContentDoc,
   type Notebook,
   type ResolvedNoteProse,
@@ -602,6 +603,7 @@ const RichEditorPane = ({
   }, [aiAssistantOpen, isLoading, memo?.id]);
   const [phonePreviewOpen, setPhonePreviewOpen] = useState(readEditorPhonePreviewPreference);
   const [memoIdCopyNotice, setMemoIdCopyNotice] = useState<{ status: "copied" | "error"; id: string } | null>(null);
+  const [attachmentSummaryNotice, setAttachmentSummaryNotice] = useState<{ status: "success" | "error"; message: string } | null>(null);
   const [resourceCopyNotice, setResourceCopyNotice] = useState<"copied" | "error" | null>(null);
   const resourceCopyNoticeTimerRef = useRef<number | null>(null);
   const handledSaveAndSyncTokenRef = useRef(saveAndSyncToken);
@@ -1202,6 +1204,8 @@ const RichEditorPane = ({
 
         const content = successfulResults.map(({ file, value: resource }) => {
           const filename = resource.filename || file.name;
+          // 上传路径没有显式来源：只写资源文件名，页码/章节留空，不做任何推断。
+          const source = formatAttachmentSource({ filename }) ?? "";
           if (resource.kind === "image") {
             registerImageUploadPreview(activeEditor, resource.url, file);
             return {
@@ -1226,6 +1230,7 @@ const RichEditorPane = ({
                   mimeType: resource.mimeType || file.type || "application/pdf",
                   byteSize: resource.byteSize,
                   displayMode: "compact",
+                  source,
                 },
               }],
             };
@@ -1240,6 +1245,7 @@ const RichEditorPane = ({
                 filename,
                 mimeType: file.type,
                 byteSize: resource.byteSize,
+                source,
               },
             }],
           };
@@ -3342,6 +3348,53 @@ const RichEditorPane = ({
   const saveMutationPendingRef = useRef(saveMutationPending);
   saveMutationPendingRef.current = saveMutationPending;
 
+  /**
+   * 「更新附件汇总」：先把自己的未保存改动落库，再用 revision/contentHash 做 CAS 重算。
+   * 成功后刷新 memo（编辑器按 revision 变化重新水合正文），失败给出可读原因。
+   */
+  const attachmentSummaryPendingRef = useRef(false);
+  const handleUpdateAttachmentSummary = useCallback(async () => {
+    const current = memoRef.current ?? memo;
+    if (!current || current.isDeleted || isLocalMemoId(current.id) || attachmentSummaryPendingRef.current) return;
+    attachmentSummaryPendingRef.current = true;
+    try {
+      if (hasUnsavedChangesRef.current) await mutateSaveAsync();
+      const target = memoRef.current ?? current;
+      const input = {
+        expectedRevision: target.revision,
+        ...(target.contentHash ? { expectedContentHash: target.contentHash } : {}),
+      };
+      const rebuild = repository.updateAttachmentSummary?.bind(repository);
+      const result = rebuild
+        ? await rebuild(target.id, input)
+        : await api.updateAttachmentSummary(target.id, input);
+      await queryClient.invalidateQueries({ queryKey: ["memo", target.id] });
+      await onSaved(result.memo);
+      setAttachmentSummaryNotice({
+        status: "success",
+        message: t(
+          result.total === 0
+            ? "editor.attachmentSummary.empty"
+            : result.changed
+              ? "editor.attachmentSummary.updated"
+              : "editor.attachmentSummary.unchanged",
+          { count: result.total },
+        ),
+      });
+      window.setTimeout(() => setAttachmentSummaryNotice(null), 3200);
+    } catch (error) {
+      setAttachmentSummaryNotice({
+        status: "error",
+        message: t("editor.attachmentSummary.failed", {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      });
+      window.setTimeout(() => setAttachmentSummaryNotice(null), 5000);
+    } finally {
+      attachmentSummaryPendingRef.current = false;
+    }
+  }, [memo, mutateSaveAsync, onSaved, queryClient, repository, t]);
+
   // Used before the note moves to another window or its window closes: wait
   // for a save in flight, then save what is left. A conflict or storage error
   // reports false so the caller keeps the note where it is.
@@ -4575,6 +4628,14 @@ const RichEditorPane = ({
                 <>
                 <DropdownMenuItem
                   className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
+                  disabled={isLocalMemoId(memo.id) || effectiveReadOnly}
+                  onSelect={() => void handleUpdateAttachmentSummary()}
+                >
+                  <Paperclip className="h-4 w-4 text-slate-500" />
+                  {t("editor.attachmentSummary.action")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
                   onSelect={() => setClassificationDetailsOpen(true)}
                 >
                   <Sparkles className="h-4 w-4 text-slate-500" />
@@ -5101,6 +5162,12 @@ const RichEditorPane = ({
       {resourceCopyNotice && (
         <ClipboardCopyNotice status={resourceCopyNotice}>
           {t(resourceCopyNotice === "copied" ? "editor.resourceActions.copied" : "editor.resourceActions.copyFailed")}
+        </ClipboardCopyNotice>
+      )}
+
+      {attachmentSummaryNotice && (
+        <ClipboardCopyNotice status={attachmentSummaryNotice.status === "success" ? "copied" : "error"}>
+          {attachmentSummaryNotice.message}
         </ClipboardCopyNotice>
       )}
 

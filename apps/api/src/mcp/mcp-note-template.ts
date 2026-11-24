@@ -5,6 +5,7 @@ import { AppError } from "../common/app-error";
 
 const purposes = {
   general: { names: ["AI 对话通用模板", "AI 對話通用模板", "AI 对话沉淀", "AI Conversation"], tags: ["ai-conversation"] },
+  "ai-conversation": { names: ["AI 对话通用模板", "AI 對話通用範本", "AI 对话沉淀", "AI Conversation Template"], tags: ["ai-conversation"] },
   issue: { names: ["问题报告", "問題報告", "Bug Report", "Issue Report"], tags: ["bug-report"] },
   meeting: { names: ["会议纪要", "會議記錄", "Meeting Minutes"], tags: ["meeting"] },
   progress: { names: ["周报与进展复盘", "週報與進展覆盤", "Weekly Review & Status"], tags: ["weekly-review"] },
@@ -17,7 +18,7 @@ export const noteTemplatePurposes = [...Object.keys(purposes), "verbatim"];
 
 export type NoteTemplatePurpose = keyof typeof purposes | "verbatim";
 
-const PURPOSE_SIGNALS: Record<Exclude<keyof typeof purposes, "general">, RegExp> = {
+const PURPOSE_SIGNALS: Record<Exclude<keyof typeof purposes, "general" | "ai-conversation">, RegExp> = {
   issue: /bug|错误|錯誤|故障|缺陷|复现|復現|问题报告|問題報告|issue report|stack trace/giu,
   meeting: /会议|會議|纪要|紀要|参会|參會|agenda|meeting minutes|standup/giu,
   progress: /周报|週報|进展|進展|复盘|復盤|周会|週會|weekly|status report/giu,
@@ -48,11 +49,15 @@ export async function resolveMcpNoteTemplate(
   const inferredPurpose = inferNotePurpose(input);
   const purpose = input.purpose ?? inferredPurpose;
   const selected = await selectMcpNoteTemplate(db, workspaceId, purpose, input.templateId);
+  // An inferred general purpose must not silently wrap an ordinary note in the
+  // AI conversation template. Only an explicit purpose or templateId applies it.
+  const inferred = input.purpose === undefined && input.templateId === undefined;
   return {
     ...selected,
+    template: inferred && inferredPurpose === "general" ? null : selected.template,
     purpose: purpose as NoteTemplatePurpose,
     inferredPurpose,
-    inferred: input.purpose === undefined && input.templateId === undefined,
+    inferred,
   };
 }
 

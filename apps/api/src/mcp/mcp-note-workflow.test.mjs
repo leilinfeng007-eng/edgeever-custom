@@ -224,3 +224,199 @@ test("re-classifies only after a real change and exposes MCP classification stat
       .toMatchObject({ status: "pending", inInbox: true, outcome: null });
   });
 });
+
+test("a normal edit of a note in a real notebook stays there", async () => {
+  await withFixture(async ({ sqlite, call }) => {
+    const projects = sqlite.query(
+      "SELECT id FROM notebooks WHERE workspace_id = ? AND slug = 'work-projects' LIMIT 1",
+    ).get(workspaceId).id;
+    const created = await call("create_memo", {
+      notebookId: projects,
+      title: "工作笔记",
+      contentMarkdown: "## 背景\n\n原内容\n",
+    });
+    expect(created.memo.notebookId).toBe(projects);
+
+    const updated = await call("update_memo", {
+      memoId: created.memo.id,
+      expectedRevision: created.memo.revision,
+      sectionOperations: [{ heading: "背景", mode: "append", contentMarkdown: "补充内容" }],
+    });
+    expect(updated.memo.notebookId).toBe(projects);
+    expect(updated.moved).toBe(false);
+    expect(updated.classificationQueued).toBe(false);
+    expect(updated.placement).toBe("keep");
+    expect(updated.action).toBe("section_update");
+    expect(sqlite.query("SELECT COUNT(*) AS count FROM inbox_classification_jobs WHERE memo_id = ?")
+      .get(created.memo.id).count).toBe(0);
+
+    const readBack = await call("get_memo", { memoId: created.memo.id });
+    expect(readBack.memo.notebookId).toBe(projects);
+    expect(readBack.memo.contentMarkdown).toContain("原内容\n\n补充内容");
+  });
+});
+
+test("re-classification moves a note to the inbox even when automatic classification is off", async () => {
+  await withFixture(async ({ sqlite, call, env }) => {
+    const projects = sqlite.query(
+      "SELECT id FROM notebooks WHERE workspace_id = ? AND slug = 'work-projects' LIMIT 1",
+    ).get(workspaceId).id;
+    const created = await call("create_memo", {
+      notebookId: projects, title: "需重新分类", contentMarkdown: "## 记录\n\n内容\n",
+    });
+    env.EDGE_EVER_AUTO_CLASSIFY = "false";
+
+    const moved = await call("update_memo", {
+      memoId: created.memo.id,
+      expectedRevision: created.memo.revision,
+      autoClassify: true,
+      sectionOperations: [{ heading: "记录", mode: "append", contentMarkdown: "更多" }],
+    });
+    expect(moved.memo.notebookId).toBe("nb_inbox");
+    expect(moved.moved).toBe(true);
+    expect(moved.placement).toBe("reclassify");
+    // 自动分类关闭：移入收件箱，但不排队。
+    expect(moved.classificationQueued).toBe(false);
+    expect(sqlite.query("SELECT COUNT(*) AS count FROM inbox_classification_jobs WHERE memo_id = ?")
+      .get(created.memo.id).count).toBe(0);
+  });
+});
+
+test("an explicit target notebook wins over a re-classification request", async () => {
+  await withFixture(async ({ sqlite, call }) => {
+    const learning = sqlite.query(
+      "SELECT id FROM notebooks WHERE workspace_id = ? AND slug = 'learning-resources' LIMIT 1",
+    ).get(workspaceId).id;
+    const created = await call("create_memo", { title: "直接归属", contentMarkdown: "正文" });
+    expect(created.memo.notebookId).toBe("nb_inbox");
+
+    const updated = await call("update_memo", {
+      memoId: created.memo.id,
+      expectedRevision: created.memo.revision,
+      notebookId: learning,
+      autoClassify: true,
+      contentMarkdown: "新正文",
+    });
+    expect(updated.memo.notebookId).toBe(learning);
+    expect(updated.moved).toBe(true);
+    expect(updated.placement).toBe("explicit_move");
+  });
+});
+
+test("a sourced retry keeps a note where it is instead of re-filing it", async () => {
+  await withFixture(async ({ sqlite, call }) => {
+    const projects = sqlite.query(
+      "SELECT id FROM notebooks WHERE workspace_id = ? AND slug = 'work-projects' LIMIT 1",
+    ).get(workspaceId).id;
+    await call("create_memo", {
+      notebookId: projects, title: "同步来源", contentMarkdown: "v1", source: "agent-run", sourceId: "keep-1",
+    });
+    const repeated = await call("create_memo", {
+      title: "同步来源", contentMarkdown: "v2", source: "agent-run", sourceId: "keep-1",
+    });
+    expect(repeated.updated).toBe(true);
+    expect(repeated.memo.notebookId).toBe(projects);
+    expect(repeated.moved).toBe(false);
+    expect(sqlite.query("SELECT COUNT(*) AS count FROM inbox_classification_jobs WHERE memo_id = ?")
+      .get(repeated.memo.id).count).toBe(0);
+  });
+});
+
+test("a stale revision reports the current revision without writing", async () => {
+  await withFixture(async ({ call, notebookId }) => {
+    const created = await call("create_memo", {
+      notebookId, title: "并发保护", contentMarkdown: "## 记录\n\n第一版\n",
+    });
+    let failure;
+    try {
+      await call("update_memo", {
+        memoId: created.memo.id,
+        expectedRevision: created.memo.revision + 5,
+        sectionOperations: [{ heading: "记录", mode: "append", contentMarkdown: "并发写入" }],
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure?.code).toBe("revision_conflict");
+    expect(failure?.status).toBe(409);
+    expect(failure?.details).toMatchObject({
+      expectedRevision: created.memo.revision + 5,
+      currentRevision: created.memo.revision,
+      memoId: created.memo.id,
+      notebookId: created.memo.notebookId,
+    });
+    const readBack = await call("get_memo", { memoId: created.memo.id });
+    expect(readBack.memo.contentMarkdown).not.toContain("并发写入");
+  });
+});
+
+test("a missing or ambiguous section lists the headings instead of rewriting the note", async () => {
+  await withFixture(async ({ call, notebookId }) => {
+    const created = await call("create_memo", {
+      notebookId, title: "章节定位", contentMarkdown: "## 背景\n\nA\n\n## 验证结果\n\nB\n\n## 验证结果\n\nC\n",
+    });
+    let missing;
+    try {
+      await call("update_memo", {
+        memoId: created.memo.id,
+        expectedRevision: created.memo.revision,
+        sectionOperations: [{ heading: "结论", mode: "append", contentMarkdown: "x" }],
+      });
+    } catch (error) {
+      missing = error;
+    }
+    expect(missing?.code).toBe("section_not_found");
+    expect(missing?.details?.availableHeadings).toEqual(["背景", "验证结果"]);
+
+    let ambiguous;
+    try {
+      await call("update_memo", {
+        memoId: created.memo.id,
+        expectedRevision: created.memo.revision,
+        sectionOperations: [{ heading: "验证结果", mode: "append", contentMarkdown: "x" }],
+      });
+    } catch (error) {
+      ambiguous = error;
+    }
+    expect(ambiguous?.code).toBe("section_ambiguous");
+    expect(ambiguous?.details?.matchCount).toBe(2);
+    const readBack = await call("get_memo", { memoId: created.memo.id });
+    expect(readBack.memo.contentMarkdown).toBe(created.memo.contentMarkdown);
+  });
+});
+
+test("an idempotency key applies a retried section append once", async () => {
+  await withFixture(async ({ call, notebookId }) => {
+    const created = await call("create_memo", {
+      notebookId, title: "幂等追加", contentMarkdown: "## 验证结果\n\n第一版\n",
+    });
+    const first = await call("update_memo", {
+      memoId: created.memo.id,
+      expectedRevision: created.memo.revision,
+      idempotencyKey: "append-verify-1",
+      sectionOperations: [{ heading: "验证结果", mode: "append", contentMarkdown: "本地通过" }],
+    });
+    const retried = await call("update_memo", {
+      memoId: created.memo.id,
+      expectedRevision: first.memo.revision,
+      idempotencyKey: "append-verify-1",
+      sectionOperations: [{ heading: "验证结果", mode: "append", contentMarkdown: "本地通过" }],
+    });
+    expect(retried.idempotentReplay).toBe(true);
+    expect(retried.changed).toBe(false);
+    expect(retried.memo.revision).toBe(first.memo.revision);
+    const readBack = await call("get_memo", { memoId: created.memo.id });
+    expect(readBack.memo.contentMarkdown.match(/本地通过/g)).toHaveLength(1);
+
+    // 同一段文字、不同 key 是用户有意重复追加。
+    const deliberate = await call("update_memo", {
+      memoId: created.memo.id,
+      expectedRevision: first.memo.revision,
+      idempotencyKey: "append-verify-2",
+      sectionOperations: [{ heading: "验证结果", mode: "append", contentMarkdown: "本地通过" }],
+    });
+    expect(deliberate.changed).toBe(true);
+    const twice = await call("get_memo", { memoId: created.memo.id });
+    expect(twice.memo.contentMarkdown.match(/本地通过/g)).toHaveLength(2);
+  });
+});

@@ -21,7 +21,7 @@ import { parseJsonArray, parseJsonObject } from "./companion-tool-receipts";
 import { prepareCompanionTurn, type CompanionRunState } from "./companion-prepare";
 import { assertCompanionAttachmentsSupported, bindCompanionTurnAttachments, storeCompanionAttachment } from "./companion-attachments";
 import { executeCompanionTurnTool, parseCompanionAgentSession } from "./companion-agent-tools";
-import { saveCompanionResponse, SaveCompanionResponseSchema } from "./companion-save-response";
+import { saveCompanionResponse, CompanionDuplicateMatchError, SaveCompanionResponseSchema } from "./companion-save-response";
 import { applyCompanionAction, dismissCompanionAction, listCompanionActions } from "./companion-actions";
 import { acknowledgeDiscovery, rememberDiscoveryFeedback, completeDiscoveryGeneration, discoveryPreparePayload, getDiscoverySettings, listDiscoveries, saveDiscoverySettings, startDiscoveryCheck } from "./companion-discovery";
 
@@ -151,7 +151,19 @@ export const registerCompanionRoutes = (parent: Hono<AppEnv>, dependencies: {
   });
   app.post("/api/v1/companion/turns/:id/save-note", zValidator("json", SaveCompanionResponseSchema), async c => {
     if (!CompanionIdSchema.safeParse(c.req.param("id")).success) return notFound(c, "Conversation not found.");
-    return c.json(await saveCompanionResponse(c, scopeFor(c), c.req.param("id"), c.req.valid("json")));
+    try {
+      return c.json(await saveCompanionResponse(c, scopeFor(c), c.req.param("id"), c.req.valid("json")));
+    } catch (error) {
+      // Same-topic notes are a user choice, so the candidates travel with the
+      // 409 instead of being hidden in the generic error body.
+      if (error instanceof CompanionDuplicateMatchError) {
+        // `details` is what the client surfaces as ApiRequestError.details.
+        return c.json({
+          error: { code: error.code, message: error.message, details: { candidates: error.candidates } },
+        }, 409);
+      }
+      throw error;
+    }
   });
   app.post("/api/v1/companion/memories", zValidator("json", CompanionMemoryInputSchema), async c => {
     return c.json({ memory: await saveCompanionMemory(c.env.storage.db, scopeFor(c), c.req.valid("json")) }, 201);

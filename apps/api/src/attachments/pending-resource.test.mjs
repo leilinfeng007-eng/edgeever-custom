@@ -183,7 +183,8 @@ describe("MCP prose writing", () => {
     const updated = await callTool("update_memo", {
       memoId: memo.id, expectedRevision: filed.revision, contentMarkdown: markdown + "\n\n已补充审批条件。",
     });
-    expect(updated.structuredContent.memo).toMatchObject({ id: memo.id, notebookId: "nb_inbox" });
+    // 普通编辑默认留在原笔记本：已归档到项目的笔记不再被移回收件箱。
+    expect(updated.structuredContent.memo).toMatchObject({ id: memo.id, notebookId: "nb_projects" });
     expect((await callTool("list_memo_resources", { memoId: memo.id })).structuredContent.resources).toHaveLength(2);
   });
 

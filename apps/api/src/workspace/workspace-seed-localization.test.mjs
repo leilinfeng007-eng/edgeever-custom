@@ -75,12 +75,16 @@ const searchMatches = (sqlite, query) => sqlite
   .all(query)
   .map((row) => row.memo_id);
 
+// Four fixed categories plus the inbox. 灵感创作 / 生活个人 are kept by
+// migration 0100 but no longer belong to a category.
 const CHINESE_NOTEBOOKS = {
   inbox: "等待分类",
   "work-projects": "工作项目",
-  "learning-resources": "学习资料",
+  "system-issues": "系统问题记录",
+  "learning-resources": "个人学习",
   "creative-ideas": "灵感创作",
   "personal-life": "生活个人",
+  "temp-notes": "临时记录",
 };
 
 describe("fresh installation", () => {
@@ -103,9 +107,11 @@ describe("fresh installation", () => {
     expect(notebookNames(sqlite)).toEqual({
       inbox: "Skrzynka",
       "work-projects": "Projekty zawodowe",
-      "learning-resources": "Materiały do nauki",
+      "system-issues": "Problemy systemowe",
+      "learning-resources": "Nauka własna",
       "creative-ideas": "Pomysły i twórczość",
       "personal-life": "Życie prywatne",
+      "temp-notes": "Notatki tymczasowe",
     });
     const note = welcome(sqlite);
     expect(note.title).toBe("Witaj w EdgeEver");
@@ -343,9 +349,9 @@ describe("member workspaces", () => {
     expect(notebookNames(sqlite, "ws_member")).toEqual({
       inbox: "受信トレイ",
       "work-projects": "仕事のプロジェクト",
-      "learning-resources": "学習資料",
-      "creative-ideas": "アイデアと創作",
-      "personal-life": "暮らしと個人",
+      "system-issues": "システム問題記録",
+      "learning-resources": "個人学習",
+      "temp-notes": "一時メモ",
     });
     expect(templateNames(sqlite, "ws_member")).toContain("ひらめきメモ");
     expect(pendingWorkspaces(sqlite)).toEqual([DEFAULT_WORKSPACE_ID]);

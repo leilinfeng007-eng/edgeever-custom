@@ -1,4 +1,5 @@
 import type { AiModelCapabilities } from "./ai-model-capabilities";
+import type { AttachmentSource } from "./attachment-source";
 import type { TiptapDoc } from "./content";
 import type { AiAction, AiPromptParameterKind, AiPromptResultMode } from "./ai-assistant";
 import type { DiagramKind, DiagramSummaryPreview } from "./diagram";
@@ -160,6 +161,11 @@ export type Resource = {
   createdAt: string;
   updatedAt: string;
   url: string;
+  /**
+   * 附件来源（`resources.metadata_json.origin` 规范化后的结果）。
+   * 旧响应没有该字段，缺失等价于「来源未提供」。
+   */
+  source?: AttachmentSource | null;
 };
 
 export type ResourceListItem = Resource & {

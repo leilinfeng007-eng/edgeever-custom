@@ -49,6 +49,14 @@ export const MemoCreateSchema = z.object({
   updatedAt: z.string().datetime().optional(),
 });
 
+// A section edit names an existing heading; the server resolves it against the
+// stored body, so no line numbers or offsets come from the client.
+export const NoteSectionOperationSchema = z.object({
+  heading: z.string().trim().min(1).max(200),
+  mode: z.enum(["append", "replace"]),
+  contentMarkdown: z.string(),
+});
+
 export const MemoUpdateSchema = z.object({
   expectedRevision: z.number().int().min(0).optional(),
   expectedContentHash: z.string().length(64).optional(),
@@ -58,6 +66,8 @@ export const MemoUpdateSchema = z.object({
   isPinned: z.boolean().optional(),
   contentJson: z.unknown().optional(),
   contentMarkdown: z.string().optional(),
+  // Section edits replace contentMarkdown; sending both is rejected by the route.
+  sectionOperations: z.array(NoteSectionOperationSchema).min(1).max(20).optional(),
   tags: z.array(z.string()).optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional(),

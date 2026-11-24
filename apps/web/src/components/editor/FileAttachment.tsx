@@ -1,13 +1,17 @@
 import {
   FileAttachment as BaseFileAttachment,
   formatAttachmentMetadata,
+  formatAttachmentSource,
+  formatAttachmentSourceText,
   getAttachmentFilenameFromLabel,
+  parseAttachmentSource,
+  parseAttachmentSourceOrNull,
   resolveAttachmentKind,
   resolveFileDisplayMode,
 } from "@edgeever/shared";
 import { useContext, useState } from "react";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
-import { ChevronDown, ChevronUp, Download, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, ExternalLink, Tag } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AttachmentExternalLink } from "@/components/attachments/AttachmentExternalLink";
 import { AttachmentFileIcon } from "@/components/attachments/AttachmentFileIcon";
@@ -16,12 +20,99 @@ import { DocxAttachmentPreview } from "@/components/attachments/DocxAttachmentPr
 import { COMPACT_ATTACHMENT_WIDTH_CLASS } from "@/components/attachments/attachment-layout";
 import { isPreviewableDocx, MAX_INLINE_DOCX_BYTES } from "@/components/attachments/docx-preview-source";
 import { VideoAttachmentPlayer } from "@/components/attachments/VideoAttachmentPlayer";
+import { Button } from "@/components/ui/button";
 import { ButtonTooltip } from "@/components/ui/button-tooltip";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useAttachmentByteSize } from "@/hooks/useAttachmentByteSize";
 import { isDesktopResourceRuntime, toApiResourceUrl, toDesktopResourceDownloadUrl } from "@/lib/desktop-resources";
 import { cn } from "@/lib/utils";
 import { AttachmentTranscriptContext } from "./AttachmentTranscriptContext";
 import { AttachmentTranscriptInline } from "./AttachmentTranscriptInline";
+
+/**
+ * 来源的轻量展示与编辑：一行次要文本 + 点开一个输入框。
+ * 只写节点 attrs.source（不调用接口），由编辑器统一保存；留空即清除来源。
+ * 文本用 truncate 截断，避免长来源撑破附件卡片。
+ */
+export const AttachmentSourceLine = ({
+  value,
+  onCommit,
+  className,
+}: {
+  /** 节点 attrs.source 原文（`formatAttachmentSource` 文本）。 */
+  value: string;
+  onCommit: (source: string) => void;
+  className?: string;
+}) => {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const normalized = parseAttachmentSourceOrNull(value);
+  const display = formatAttachmentSourceText(normalized) ?? "";
+
+  const commit = (raw: string) => {
+    const next = formatAttachmentSource(parseAttachmentSource(raw)) ?? "";
+    if (next === (formatAttachmentSource(normalized) ?? "")) return;
+    onCommit(next);
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className={cn(
+          "flex min-w-0 max-w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200",
+          className,
+        )}
+        aria-label={t(display ? "editor.attachmentSource.edit" : "editor.attachmentSource.add")}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setDraft(display);
+          setOpen(true);
+        }}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <Tag aria-hidden="true" className="h-3 w-3 shrink-0" />
+        <span className={cn("truncate", !display && "italic")}>
+          {display || t("editor.attachmentSource.add")}
+        </span>
+      </button>
+      <Dialog open={open} onOpenChange={(next) => {
+        // 关闭（确认/点外部）时统一落库；重复提交同值不会写脏数据。
+        if (!next) commit(draft);
+        setOpen(next);
+      }}>
+        <DialogContent className="max-w-md" onClick={(event) => event.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>{t("editor.attachmentSource.dialogTitle")}</DialogTitle>
+            <DialogDescription>{t("editor.attachmentSource.dialogDescription")}</DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={draft}
+            placeholder={t("editor.attachmentSource.placeholder")}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => commit(draft)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commit(draft);
+                setOpen(false);
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button type="button" size="sm" onClick={() => { commit(draft); setOpen(false); }}>
+              {t("editor.attachmentSource.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
 
 const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
   const { t } = useTranslation();
@@ -37,6 +128,7 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
     ? node.attrs.filename
     : getAttachmentFilenameFromLabel(label);
   const mimeType = typeof node.attrs.mimeType === "string" ? node.attrs.mimeType : "";
+  const source = typeof node.attrs.source === "string" ? node.attrs.source : "";
   // Keep the stored label untouched, but never show the system "Attachment:" prefix.
   const displayName = filename || label;
   const resolvedUrl = isDesktopResourceRuntime() ? url : toApiResourceUrl(url);
@@ -121,6 +213,13 @@ const FileAttachmentNodeView = ({ node, updateAttributes }: NodeViewProps) => {
               </button>
             </ButtonTooltip>
           ) : null}
+        </span>
+        {/* 来源行独立于文件名按钮/链接，避免按钮嵌套；长文本在这里截断。 */}
+        <span className="flex min-w-0 items-center border-t border-slate-200/70 px-2 py-0.5 dark:border-white/10">
+          <AttachmentSourceLine
+            value={source}
+            onCommit={(next) => updateAttributes({ source: next })}
+          />
         </span>
         {isAudio && resolvedUrl ? (
           <span className="border-t border-slate-200 px-3 py-2">

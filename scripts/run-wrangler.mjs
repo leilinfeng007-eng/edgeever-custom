@@ -85,10 +85,16 @@ const usesRepositoryConfig = baseConfigPath === repositoryConfigPath;
 const baseConfigDirectory = dirname(baseConfigPath);
 const instance = process.env.EDGE_EVER_INSTANCE?.trim();
 const instanceKey = instance?.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
+// A long-running `wrangler dev --local` watches this file. Letting a remote
+// deployment rewrite the same path made the dev server restart with the remote
+// D1 UUID and serve an empty local database, so local commands get their own.
+const usesLocalConfigFile = wranglerArgs.includes("--local") && !wranglerArgs.includes("deploy");
 const generatedConfigPath = resolve(
-  instanceKey
-    ? `.wrangler.generated.${instanceKey.toLowerCase()}.toml`
-    : ".wrangler.generated.toml",
+  usesLocalConfigFile
+    ? ".wrangler.generated.local.toml"
+    : instanceKey
+      ? `.wrangler.generated.${instanceKey.toLowerCase()}.toml`
+      : ".wrangler.generated.toml",
 );
 const generatedSecretsPath = resolve(
   instanceKey
@@ -198,7 +204,10 @@ if (workersDev) {
 }
 
 const d1DatabaseId = envValue("D1_DATABASE_ID");
-if (d1DatabaseId) {
+// Miniflare keys its local D1 file by database_id. Applying a remote UUID to a
+// --local command silently switches local development to a different, empty
+// database, so local commands must keep the repository placeholder instead.
+if (d1DatabaseId && !isLocalCommand) {
   if (!UUID_PATTERN.test(d1DatabaseId)) {
     throw new Error("EDGE_EVER_D1_DATABASE_ID must be a Cloudflare D1 UUID.");
   }
@@ -335,6 +344,9 @@ const runtimeVars = {
   EDGE_EVER_R2_BUCKET_NAME: resolvedR2BucketName,
   EDGE_EVER_DEMO_MODE: envValue("DEMO_MODE"),
   EDGE_EVER_LOCAL_DEMO_SEED: envValue("LOCAL_DEMO_SEED"),
+  // Local Miniflare has no Cron Trigger, so queueing there would leave jobs
+  // pending forever. Persistent local dev and demo seed both stay dormant.
+  EDGE_EVER_AUTO_CLASSIFY: isLocalCommand ? "false" : envValue("AUTO_CLASSIFY"),
   // Persistent local development uses real sessions. Only the isolated local
   // demo stays auth-free; remote deployments always fail closed.
   EDGE_EVER_ALLOW_UNAUTHENTICATED: isLocalCommand ? String(envValue("LOCAL_DEMO_SEED") === "true") : undefined,
@@ -373,6 +385,17 @@ if (demoMode === "true") {
 
 [triggers]
 crons = [${tomlString(demoResetCron)}]
+`;
+} else {
+  // Automatic filing needs a durable trigger that survives closed browsers.
+  // Demo reset and the classifier never share a schedule: the scheduled()
+  // handler returns early for demo mode, so each mode gets its own cron.
+  const classificationCron = envValue("AUTO_CLASSIFY_CRON") || "*/5 * * * *";
+  changed = true;
+  config = `${config.trimEnd()}
+
+[triggers]
+crons = [${tomlString(classificationCron)}]
 `;
 }
 

@@ -1,10 +1,23 @@
 import { resolveSupportedLocale, type SupportedLocale } from "./i18n/locales";
 
+export type DefaultNotebookKey = "inbox" | "projects" | "system-issues" | "learning" | "temp";
+
 export type DefaultNotebookSeed = {
-  key: "inbox" | "projects" | "learning" | "creative" | "personal";
+  key: DefaultNotebookKey;
   slug: string;
   color: string | null;
   sortOrder: number;
+  names: Record<SupportedLocale, string>;
+};
+
+/**
+ * Notebooks that older installations seeded but new workspaces no longer get:
+ * 灵感创作 (creative) and 生活个人 (personal). They stay in the sidebar of every
+ * existing workspace, so a first sign-in still localizes their untouched names.
+ * They are never provisioned for a new workspace.
+ */
+export type LegacyNotebookNameSeed = {
+  slug: string;
   names: Record<SupportedLocale, string>;
 };
 
@@ -48,27 +61,63 @@ export const DEFAULT_NOTEBOOK_SEEDS: readonly DefaultNotebookSeed[] = [
     },
   },
   {
+    key: "system-issues",
+    slug: "system-issues",
+    color: null,
+    sortOrder: 25,
+    names: {
+      "zh-CN": "系统问题记录",
+      "zh-TW": "系統問題記錄",
+      "en-US": "System Issues",
+      es: "Incidencias del sistema",
+      de: "Systemprobleme",
+      fr: "Incidents système",
+      ja: "システム問題記録",
+      pl: "Problemy systemowe",
+      ru: "Системные проблемы",
+    },
+  },
+  {
+    // The slug is kept so existing "学习资料" notebooks are adopted as "个人学习".
     key: "learning",
     slug: "learning-resources",
     color: null,
     sortOrder: 30,
     names: {
-      "zh-CN": "学习资料",
-      "zh-TW": "學習資料",
-      "en-US": "Learning Resources",
-      es: "Material de aprendizaje",
-      de: "Lernmaterialien",
-      fr: "Ressources d'apprentissage",
-      ja: "学習資料",
-      pl: "Materiały do nauki",
-      ru: "Учебные материалы",
+      "zh-CN": "个人学习",
+      "zh-TW": "個人學習",
+      "en-US": "Personal Learning",
+      es: "Aprendizaje personal",
+      de: "Persönliches Lernen",
+      fr: "Apprentissage personnel",
+      ja: "個人学習",
+      pl: "Nauka własna",
+      ru: "Личное обучение",
     },
   },
   {
-    key: "creative",
-    slug: "creative-ideas",
+    key: "temp",
+    slug: "temp-notes",
     color: null,
     sortOrder: 40,
+    names: {
+      "zh-CN": "临时记录",
+      "zh-TW": "臨時記錄",
+      "en-US": "Temp Notes",
+      es: "Notas temporales",
+      de: "Temporäre Notizen",
+      fr: "Notes temporaires",
+      ja: "一時メモ",
+      pl: "Notatki tymczasowe",
+      ru: "Временные заметки",
+    },
+  },
+];
+
+// Localization only: these slugs are no longer seeded for new workspaces.
+export const LEGACY_NOTEBOOK_NAME_SEEDS: readonly LegacyNotebookNameSeed[] = [
+  {
+    slug: "creative-ideas",
     names: {
       "zh-CN": "灵感创作",
       "zh-TW": "靈感創作",
@@ -82,10 +131,7 @@ export const DEFAULT_NOTEBOOK_SEEDS: readonly DefaultNotebookSeed[] = [
     },
   },
   {
-    key: "personal",
     slug: "personal-life",
-    color: null,
-    sortOrder: 50,
     names: {
       "zh-CN": "生活个人",
       "zh-TW": "生活個人",
@@ -104,6 +150,19 @@ export const localizeDefaultNotebookName = (
   seed: DefaultNotebookSeed,
   locale: string | null | undefined,
 ) => seed.names[resolveSupportedLocale(locale)];
+
+// Stable notebook id suffix per key. It is not derived from the key itself,
+// because `system-issues` would otherwise produce a hyphenated id.
+export const DEFAULT_NOTEBOOK_ID_SUFFIXES: Record<DefaultNotebookKey, string> = {
+  inbox: "inbox",
+  projects: "projects",
+  "system-issues": "system_issues",
+  learning: "learning",
+  temp: "temp",
+};
+
+export const defaultNotebookId = (workspaceId: string, key: DefaultNotebookKey) =>
+  `${workspaceId}_${DEFAULT_NOTEBOOK_ID_SUFFIXES[key]}`;
 
 export const WELCOME_MEMO_ID = "memo_welcome";
 

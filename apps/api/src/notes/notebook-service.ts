@@ -13,6 +13,13 @@ export const inboxNotebookIdentitySql = (alias: string) =>
   `(${alias}.id = ${alias}.workspace_id || '_inbox' OR ${alias}.id = 'nb_inbox' OR ${alias}.slug = 'inbox')`;
 
 export async function resolveWorkspaceInboxId(db: DatabaseAdapter, workspaceId: string) {
+  const row = await findWorkspaceInboxId(db, workspaceId);
+  if (!row) throw new AppError("inbox_notebook_missing", "The inbox notebook (等待分类) is unavailable.", 409);
+  return row;
+}
+
+/** Nullable form for callers that can proceed without an inbox. */
+export async function findWorkspaceInboxId(db: DatabaseAdapter, workspaceId: string) {
   const preferred = workspaceInboxId(workspaceId);
   const row = await db.prepare(
     `SELECT id FROM notebooks
@@ -21,8 +28,7 @@ export async function resolveWorkspaceInboxId(db: DatabaseAdapter, workspaceId: 
      ORDER BY CASE WHEN id = ? THEN 0 WHEN id = 'nb_inbox' THEN 1 ELSE 2 END
      LIMIT 1`,
   ).bind(workspaceId, preferred).first<{ id: string }>();
-  if (!row) throw new AppError("inbox_notebook_missing", "The inbox notebook (等待分类) is unavailable.", 409);
-  return row.id;
+  return row?.id ?? null;
 }
 
 export type NotebookRow = {

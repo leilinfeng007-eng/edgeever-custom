@@ -7,11 +7,13 @@ import {
 } from "@edgeever/shared/ai-prompt-seeds";
 import {
   DEFAULT_NOTEBOOK_SEEDS,
+  LEGACY_NOTEBOOK_NAME_SEEDS,
   WELCOME_MEMO_ID,
   WELCOME_MEMO_REPAIRED_CONTENT_HASH,
   WELCOME_MEMO_SEED_CONTENT_HASH,
   WELCOME_MEMO_SEED_TITLE,
   buildWelcomeMemoContent,
+  defaultNotebookId,
   localizeDefaultNotebookName,
 } from "@edgeever/shared/default-workspace-seeds";
 import {
@@ -19,6 +21,7 @@ import {
   defaultMemoTemplateId,
   localizeMemoTemplateSeed,
 } from "@edgeever/shared/memo-template-seeds";
+import { resolveSupportedLocale } from "@edgeever/shared/i18n/locales";
 import { createId, isoNow } from "../common/entity-utils";
 import { markWorkspaceExampleSeedPendingStatement } from "./workspace-example-seed";
 import { sha256 } from "../common/hash-utils";
@@ -57,7 +60,7 @@ export const createDefaultNotebookRows = (
   workspaceId: string,
   locale?: string | null,
 ): DefaultNotebookRow[] => DEFAULT_NOTEBOOK_SEEDS.map((seed) => ({
-  id: seed.key === "inbox" ? workspaceInboxId(workspaceId) : `${workspaceId}_${seed.key}`,
+  id: defaultNotebookId(workspaceId, seed.key),
   name: localizeDefaultNotebookName(seed, locale),
   slug: seed.slug,
   color: seed.color,
@@ -217,9 +220,11 @@ export const createWorkspaceSeedLocalizationStatements = async (
         workspaceId,
       );
     }),
-    ...DEFAULT_NOTEBOOK_SEEDS.map((seed) => {
+    // Legacy creative/personal notebooks are no longer provisioned but still
+    // exist in upgraded workspaces, so an untouched name is localized too.
+    ...[...DEFAULT_NOTEBOOK_SEEDS, ...LEGACY_NOTEBOOK_NAME_SEEDS].map((seed) => {
       const seededNames = Object.values(seed.names);
-      const name = localizeDefaultNotebookName(seed, locale);
+      const name = seed.names[resolveSupportedLocale(locale)];
       return db.prepare(
         `UPDATE notebooks
          SET name = ?, updated_at = ?

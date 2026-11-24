@@ -1,4 +1,9 @@
-import { resolveResourceUploadMimeType } from "@edgeever/shared";
+import {
+  ATTACHMENT_SOURCE_METADATA_KEY,
+  normalizeAttachmentSource,
+  resolveResourceUploadMimeType,
+  type AttachmentSource,
+} from "@edgeever/shared";
 import { audit, auditStatement } from "../common/audit";
 import type { AppContext, AuditActor, AuthContext, Bindings } from "../api-context";
 import { AppError } from "../common/app-error";
@@ -78,6 +83,17 @@ export type PendingResourceUploadInput = {
   filename?: string | null;
   byteSize: number;
   label?: string | null;
+  /** Attachment source persisted with the file and carried into `resources.metadata.origin` on binding. */
+  origin?: AttachmentSource | null;
+};
+
+const readPendingMetadata = (value: string | null | undefined): Record<string, unknown> => {
+  try {
+    const parsed = JSON.parse(value ?? "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 };
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
@@ -166,15 +182,18 @@ export const createPendingResourceUpload = async (
   const uploadExpiresAt = later(startedAt, PENDING_RESOURCE_UPLOAD_TTL_MS);
   const label = input.label?.trim() || null;
   const objectKey = `workspaces/${auth.workspaceId}/uploads/${id}${extension}`;
+  // 来源随文件一起保存；绑定资源时沿用同一份 metadata。
+  const origin = normalizeAttachmentSource(input.origin);
+  const initialMetadata = origin ? { [ATTACHMENT_SOURCE_METADATA_KEY]: origin } : {};
 
   // One statement checks every workspace limit and inserts, so concurrent
   // requests cannot each pass the check before any of them has inserted.
   const inserted = await db.prepare(
     `INSERT INTO pending_resources (
       id, workspace_id, token_hash, state, kind, mime_type, filename, byte_size, label, object_key,
-      actor_type, actor_id, api_token_id, session_id, created_at, upload_expires_at, expires_at
+      metadata_json, actor_type, actor_id, api_token_id, session_id, created_at, upload_expires_at, expires_at
     )
-    SELECT ?, ?, ?, 'awaiting_upload', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, 'awaiting_upload', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     FROM (
       SELECT COUNT(*) AS total_count,
              COALESCE(SUM(byte_size), 0) AS total_bytes,
@@ -192,6 +211,7 @@ export const createPendingResourceUpload = async (
     input.byteSize,
     label,
     objectKey,
+    JSON.stringify(initialMetadata),
     auth.actorType,
     auth.actorId,
     auth.tokenId ?? null,
@@ -444,7 +464,14 @@ export const consumePendingResourceUpload = async (
   const prepared = row.kind === "image"
     ? prepareImageForStorage({ bytes, filename: row.filename, mimeType: row.mime_type, source: "mcp" })
     : null;
-  const metadata = prepared?.metadata ?? { originalFilename: row.filename };
+  // 保留申请上传时写入的来源（origin），其余 metadata 由存储流程决定。
+  const pendingMetadata = readPendingMetadata(row.metadata_json);
+  const metadata = {
+    ...(prepared?.metadata ?? { originalFilename: row.filename }),
+    ...(pendingMetadata[ATTACHMENT_SOURCE_METADATA_KEY]
+      ? { [ATTACHMENT_SOURCE_METADATA_KEY]: pendingMetadata[ATTACHMENT_SOURCE_METADATA_KEY] }
+      : {}),
+  };
   const uploadedAt = Date.now();
   const bindBefore = later(uploadedAt, PENDING_RESOURCE_BIND_TTL_MS);
   const uploaded: PendingResourceRow = {

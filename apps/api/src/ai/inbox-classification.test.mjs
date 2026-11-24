@@ -3,10 +3,11 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { processInboxClassification } from "./inbox-classification.ts";
+import { drainInboxClassification, processInboxClassification, requeueInboxClassification } from "./inbox-classification.ts";
 import { executeWorkspaceTool } from "../mcp/mcp-tool-executor.ts";
 import { createMemoRecord, getMemoDetail, updateMemoRecord } from "../notes/memo-service.ts";
 import { createSelfHostedStorageAdapter } from "../storage/self-hosted-storage-adapter.ts";
+import { AppError } from "../common/app-error.ts";
 
 const workspaceId = "ws_default";
 const noteMarkdown = "## 处理过程\n\nWeKnora 容器部署完成，验证健康接口返回正常。";
@@ -174,5 +175,60 @@ test("MCP completion postpones a queued classification and a stale decision cann
     }, available());
     expect((await get(memo.id)).notebookId).toBe("nb_projects");
     expect(job(memo.id)).toMatchObject({ status: "moved", outcome: "classified" });
+  });
+});
+
+test("Cloudflare Workers runtime runs the same queue as the Bun server", async () => {
+  await withFixture(async ({ env, create, classify, get, job }) => {
+    env.EDGE_EVER_RUNTIME = "cloudflare-workers";
+    const memo = await create();
+    expect(job(memo.id)).toMatchObject({ status: "pending" });
+    await classify(async () => ({ notebookId: "nb_projects", reason: "明确的项目记录。", tags: [] }));
+    expect(job(memo.id)).toMatchObject({ status: "moved", outcome: "classified" });
+    expect((await get(memo.id)).notebookId).toBe("nb_projects");
+  });
+});
+
+test("a drain pass stops at its batch limit so one tick cannot exhaust the budget", async () => {
+  await withFixture(async ({ env, create, job }) => {
+    const memos = await Promise.all([create(), create(), create()]);
+    let calls = 0;
+    const result = await drainInboxClassification(env, {
+      batchSize: 2,
+      classify: async () => { calls += 1; return { notebookId: "nb_projects", tags: [] }; },
+    });
+    expect(result).toMatchObject({ processed: 2, exhausted: false });
+    expect(calls).toBe(2);
+    expect(memos.filter((memo) => job(memo.id).status === "pending")).toHaveLength(1);
+  });
+});
+
+test("editing an inbox note re-queues it but a manual keep-in-inbox hold wins", async () => {
+  await withFixture(async ({ env, create, classify, job }) => {
+    const memo = await create();
+    await classify(async () => ({ notebookId: null, reason: "归属不明确。", tags: [] }));
+    expect(job(memo.id)).toMatchObject({ status: "retained", outcome: "unclear" });
+
+    // A human choice to keep the note in the inbox must survive later edits.
+    await env.storage.db.batch([env.storage.db.prepare(
+      `UPDATE inbox_classification_jobs SET status = 'retained', outcome = 'explicit_location' WHERE memo_id = ?`,
+    ).bind(memo.id)]);
+    await env.storage.db.batch(requeueInboxClassification(env, auth, "nb_inbox", memo.id));
+    expect(job(memo.id)).toMatchObject({ status: "retained", outcome: "explicit_location" });
+
+    // A plain uncertain result has no hold, so the next edit asks again.
+    await env.storage.db.batch([env.storage.db.prepare(
+      `UPDATE inbox_classification_jobs SET status = 'retained', outcome = 'unclear' WHERE memo_id = ?`,
+    ).bind(memo.id)]);
+    await env.storage.db.batch(requeueInboxClassification(env, auth, "nb_inbox", memo.id));
+    expect(job(memo.id)).toMatchObject({ status: "pending", attempts: 0 });
+  });
+});
+
+test("a missing model stops with a readable outcome instead of retrying forever", async () => {
+  await withFixture(async ({ create, classify, job }) => {
+    const memo = await create();
+    await classify(async () => { throw new AppError("ai_not_configured", "Choose a default AI model first.", 409); });
+    expect(job(memo.id)).toMatchObject({ status: "retained", outcome: "model_not_configured" });
   });
 });

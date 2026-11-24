@@ -3016,6 +3016,21 @@ export const es = {
       "deleteDescription": "El archivo adjunto se eliminará permanentemente del almacenamiento y de esta nota. Esta acción no se puede deshacer.",
       "failed": "La acción sobre el archivo adjunto falló. Inténtalo de nuevo."
     },
+    attachmentSource: {
+      add: "Añadir origen",
+      edit: "Editar origen",
+      dialogTitle: "Origen del adjunto",
+      dialogDescription: "Registra el archivo de origen, la página, el capítulo, la hoja o el rango. Deja vacíos los datos desconocidos; no se infiere nada.",
+      placeholder: "p. ej. informe.pdf · P.3-5 · Capítulo: Requisitos",
+      confirm: "Guardar origen",
+    },
+    attachmentSummary: {
+      action: "Actualizar resumen de adjuntos",
+      updated: "Resumen de adjuntos actualizado ({{count}}).",
+      unchanged: "El resumen de adjuntos ya está actualizado ({{count}}).",
+      empty: "Esta nota no tiene adjuntos que resumir.",
+      failed: "No se pudo actualizar el resumen de adjuntos: {{message}}",
+    },
     "placeholder": "Espacio para IA · / comandos · @ notas",
     "placeholderCommands": "/ comandos · @ notas",
     "noteBodyAria": "Cuerpo de la nota",
