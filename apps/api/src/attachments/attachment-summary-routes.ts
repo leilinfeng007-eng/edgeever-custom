@@ -6,6 +6,8 @@ import { isPdfAttachment, type MemoDetail, type Resource } from "@edgeever/share
 import type { Hono } from "hono";
 import type { AppContext, AppEnv, AuditActor } from "../api-context";
 import { getActorLabel, getAuditActor, getWorkspaceId, requireAnyScopes } from "../auth/request-auth";
+import { assertNotebookAccess, resolveRequestNotebookAccess } from "../auth/token-notebook-access";
+import { AppError } from "../common/app-error";
 import { apiError, badRequest, notFound } from "../common/http-errors";
 import {
   applyAttachmentSummary,
@@ -69,6 +71,13 @@ export const registerAttachmentSummaryRoutes = (
 
     const memo = await dependencies.getMemoDetail(database, workspaceId, memoId);
     if (!memo) return notFound(context, "Memo not found");
+    try {
+      // 汇总会改写正文，因此受限 Token 需要目标笔记的写权限。
+      assertNotebookAccess(await resolveRequestNotebookAccess(context), "write", memo.notebookId, "update this note's attachment summary");
+    } catch (error) {
+      if (error instanceof AppError) return apiError(context, error.code, error.message, error.status);
+      throw error;
+    }
     if (memo.revision !== expectedRevision) {
       return conflict(context, "revision_conflict", "Memo was updated elsewhere. Reload before saving.");
     }

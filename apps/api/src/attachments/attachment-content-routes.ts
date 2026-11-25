@@ -8,6 +8,7 @@ import { AppError } from "../common/app-error";
 import { apiError } from "../common/http-errors";
 import { readAttachmentContent } from "./attachment-content";
 import { getWorkspaceId, requireScopes } from "../auth/request-auth";
+import { assertNotebookAccess, resolveRequestNotebookAccess } from "../auth/token-notebook-access";
 
 export function registerAttachmentContentRoute(app: Hono<AppEnv>) {
   app.get("/api/v1/attachment-content/:memoId/:resourceId", async (c) => {
@@ -15,6 +16,16 @@ export function registerAttachmentContentRoute(app: Hono<AppEnv>) {
     if (denied) return denied;
     const offset = Number(c.req.query("offset") ?? 0);
     try {
+      // 附件文本与正文同级：受限 Token 只能读取授权笔记本内的笔记附件。
+      const notebookAccess = await resolveRequestNotebookAccess(c);
+      if (notebookAccess.restricted) {
+        const memo = await c.env.storage.db.prepare(
+          `SELECT notebook_id FROM memos WHERE id = ? AND workspace_id = ?`,
+        ).bind(c.req.param("memoId"), getWorkspaceId(c)).first<{ notebook_id: string }>();
+        if (memo) {
+          assertNotebookAccess(notebookAccess, "read", memo.notebook_id, "read this attachment");
+        }
+      }
       const result = await readAttachmentContent(c.env, getWorkspaceId(c), { ...c.req.param(), offset, mode: "content" });
       if (result.format !== "text") return apiError(c, "attachment_format_unsupported", "Attachment text is unavailable.", 422);
       c.header("Cache-Control", "private, no-store");

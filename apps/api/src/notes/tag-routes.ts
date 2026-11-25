@@ -8,6 +8,7 @@ import {
   getWorkspaceId,
   requireScopes,
 } from "../auth/request-auth";
+import { resolveRequestNotebookAccess } from "../auth/token-notebook-access";
 import {
   listTagSummaries,
   updateTagAcrossMemos,
@@ -26,7 +27,13 @@ export const registerTagRoutes = (app: Hono<AppEnv>) => {
     const denied = requireScopes(c, "read:tags");
     if (denied) return denied;
 
-    return c.json({ tags: await listTagSummaries(c.env.storage.db, getWorkspaceId(c)) });
+    return c.json({
+      tags: await listTagSummaries(
+        c.env.storage.db,
+        getWorkspaceId(c),
+        await resolveRequestNotebookAccess(c),
+      ),
+    });
   });
 
   app.patch("/api/v1/tags/:tag", zValidator("json", TagRenameSchema), async (c) => {
@@ -39,7 +46,8 @@ export const registerTagRoutes = (app: Hono<AppEnv>) => {
       decodeTagParam(c.req.param("tag")),
       c.req.valid("json").name,
       getAuditActor(c),
-      getActorLabel(c)
+      getActorLabel(c),
+      await resolveRequestNotebookAccess(c),
     );
     return c.json({ ok: true, updated });
   });
@@ -54,7 +62,8 @@ export const registerTagRoutes = (app: Hono<AppEnv>) => {
       decodeTagParam(c.req.param("tag")),
       null,
       getAuditActor(c),
-      getActorLabel(c)
+      getActorLabel(c),
+      await resolveRequestNotebookAccess(c),
     );
     return c.json({ ok: true, updated });
   });

@@ -3,6 +3,7 @@
  * 业务模块依赖 storage 契约，不直接依赖某个平台的数据库对象。
  */
 import type { Context } from "hono";
+import type { TokenNotebookAccess, TokenNotebookAccessLevel } from "@edgeever/shared";
 import type { CloudflareStorageBindings } from "./storage/cloudflare-storage-adapter";
 import type { StorageAdapter } from "./storage/storage-contract";
 
@@ -60,6 +61,13 @@ export type AuthContext = {
   role: "owner" | "member";
   sessionId?: string;
   tokenId?: string;
+  /**
+   * API Token 的笔记本白名单。交互式会话与未受限 Token 为 `null`；
+   * 受限请求通过 resolveNotebookAccess 按当前层级解析成有效笔记本集合。
+   */
+  notebookAccess?: TokenNotebookAccess[] | null;
+  /** 应用于整个白名单的单一访问级别。 */
+  notebookAccessLevel?: TokenNotebookAccessLevel;
   /** Recovery-code session that must rebind TOTP before any other access. */
   mfaRestricted?: boolean;
 };

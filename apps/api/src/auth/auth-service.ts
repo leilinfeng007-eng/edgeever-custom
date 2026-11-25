@@ -17,6 +17,7 @@ import type { UserRow } from "./auth-routes";
 import { createId, isoNow, parseJsonArray } from "../common/entity-utils";
 import { sha256 } from "../common/hash-utils";
 import { apiError } from "../common/http-errors";
+import { isCorruptedNotebookAccess, parseNotebookAccessJson, parseNotebookAccessLevel } from "./token-notebook-access";
 import type { DatabaseAdapter } from "../storage/storage-contract";
 import type { InstanceUserRow } from "./user-routes";
 import { ensureUserWorkspace } from "../workspace/workspace-provisioning";
@@ -295,7 +296,7 @@ const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<A
   }
 
   const row = await c.env.storage.db.prepare(
-    `SELECT id, name, token_value, scopes_json, last_used_at, expires_at, is_revoked, created_at, workspace_id
+    `SELECT id, name, token_value, scopes_json, notebook_access_json, notebook_access_level, last_used_at, expires_at, is_revoked, created_at, workspace_id
      FROM api_tokens
      WHERE token_hash = ?
        AND is_revoked = 0
@@ -336,6 +337,11 @@ const authenticateBearerToken = async (c: AppContext, touch: boolean): Promise<A
     workspaceId: row.workspace_id,
     role: "member",
     tokenId: row.id,
+    notebookAccess: parseNotebookAccessJson(row.notebook_access_json),
+    // 损坏的授权记录整体拒绝：级别不能放宽解析器已判定失败的记录。
+    notebookAccessLevel: isCorruptedNotebookAccess(row.notebook_access_json)
+      ? "read"
+      : parseNotebookAccessLevel(row.notebook_access_level),
   };
 };
 

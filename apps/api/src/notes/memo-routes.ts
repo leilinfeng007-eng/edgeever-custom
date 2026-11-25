@@ -23,6 +23,12 @@ import { apiError, badRequest, notFound } from "../common/http-errors";
 import type { ListMemosInput, ListMemosResult } from "./memo-list-service";
 import { getActorLabel, getAuditActor, getWorkspaceId, requireScopes } from "../auth/request-auth";
 import { deleteReleasedResourceObjects } from "../attachments/resource-service";
+import {
+  assertMemoNotebookWriteAccess,
+  assertNotebookAccess,
+  resolveRequestNotebookAccess,
+  type NotebookAccess,
+} from "../auth/token-notebook-access";
 import type { DatabaseAdapter } from "../storage/storage-contract";
 import type { MemoMutationCommit } from "./memo-service";
 import { applyNoteSectionOperations } from "../mcp/mcp-note-sections";
@@ -145,6 +151,29 @@ export const registerMemoRoutes = (
   app: Hono<AppEnv>,
   dependencies: MemoRouteDependencies,
 ) => {
+  // 受限 Token 的笔记本守卫。未受限请求不额外读库；
+  // 越权统一返回 403 notebook_access_denied。
+  const assertMemoAccess = async (
+    context: AppContext,
+    memoId: string,
+    kind: "read" | "write",
+    notebookAccess: NotebookAccess,
+    action: string,
+    includeDeleted = true,
+  ) => {
+    if (!notebookAccess.restricted) return;
+    const memo = await dependencies.getMemoDetail(
+      context.env.storage.db,
+      getWorkspaceId(context),
+      memoId,
+      includeDeleted,
+    );
+    if (memo) assertNotebookAccess(notebookAccess, kind, memo.notebookId, action);
+  };
+
+  const assertMemoIdsAccess = (context: AppContext, memoIds: string[], notebookAccess: NotebookAccess, action: string) =>
+    assertMemoNotebookWriteAccess(context.env.storage.db, getWorkspaceId(context), memoIds, notebookAccess, action);
+
   app.get("/api/v1/memos", async (context) => {
     const denied = requireScopes(context, "read:memos");
     if (denied) return denied;
@@ -161,6 +190,7 @@ export const registerMemoRoutes = (
       filter: context.req.query("filter"),
       limit: Number(context.req.query("limit") ?? 100),
       cursor: context.req.query("cursor"),
+      notebookAccess: await resolveRequestNotebookAccess(context),
     }));
   });
 
@@ -170,6 +200,12 @@ export const registerMemoRoutes = (
 
     try {
       const input = context.req.valid("json");
+      assertNotebookAccess(
+        await resolveRequestNotebookAccess(context),
+        "write",
+        input.notebookId,
+        "create a memo",
+      );
       const memo = await dependencies.createMemo(
         context.env.storage.db,
         getWorkspaceId(context),
@@ -224,6 +260,12 @@ export const registerMemoRoutes = (
     if (!(file instanceof File) || !notebookId || !contentMarkdown.includes("EDGEVERRESOURCEID")) {
       return badRequest(context, "notebookId, contentMarkdown, and an image file are required.");
     }
+    assertNotebookAccess(
+      await resolveRequestNotebookAccess(context),
+      "write",
+      notebookId,
+      "create a memo with an image",
+    );
     const resourceId = createId("res");
     const markdown = contentMarkdown.replaceAll("EDGEVERRESOURCEID", resourceId);
     const actor = getAuditActor(context);
@@ -265,6 +307,18 @@ export const registerMemoRoutes = (
       context.req.param("id"),
       context.req.query("includeDeleted") === "1",
     );
+    if (memo) {
+      try {
+        assertNotebookAccess(
+          await resolveRequestNotebookAccess(context),
+          "read",
+          memo.notebookId,
+          "read this memo",
+        );
+      } catch (error) {
+        return handleAppError(context, error);
+      }
+    }
     return memo ? context.json({ memo }) : notFound(context, "Memo not found");
   });
 
@@ -272,6 +326,17 @@ export const registerMemoRoutes = (
     const denied = requireScopes(context, "write:memos");
     if (denied) return denied;
 
+    try {
+      await assertMemoAccess(
+        context,
+        context.req.param("id"),
+        "write",
+        await resolveRequestNotebookAccess(context),
+        "edit this memo",
+      );
+    } catch (error) {
+      return handleAppError(context, error);
+    }
     const editSession = await dependencies.createMemoEditSession(context, context.req.param("id"));
     return editSession
       ? context.json({ editSession })
@@ -284,6 +349,9 @@ export const registerMemoRoutes = (
 
     const input = context.req.valid("json");
     try {
+      const notebookAccess = await resolveRequestNotebookAccess(context);
+      assertNotebookAccess(notebookAccess, "write", input.notebookId, "move memos into this notebook");
+      await assertMemoIdsAccess(context, input.memoIds, notebookAccess, "move these memos");
       const moved = await dependencies.moveMemos(
         context.env.storage.db,
         getWorkspaceId(context),
@@ -305,6 +373,12 @@ export const registerMemoRoutes = (
 
     const input = context.req.valid("json");
     try {
+      await assertMemoIdsAccess(
+        context,
+        input.memoIds,
+        await resolveRequestNotebookAccess(context),
+        "delete these memos",
+      );
       const deleted = await dependencies.deleteMemos(
         context.env,
         getWorkspaceId(context),
@@ -322,6 +396,17 @@ export const registerMemoRoutes = (
     const denied = requireScopes(context, "write:memos");
     if (denied) return denied;
 
+    // 清空回收站是工作区级破坏性操作；受限 Token 一律拒绝。
+    const notebookAccess = await resolveRequestNotebookAccess(context);
+    if (notebookAccess.restricted) {
+      return apiError(
+        context,
+        "notebook_access_denied",
+        "This API token does not have access to every notebook, so it cannot empty the trash. Update the token's notebook access in EdgeEver settings.",
+        403,
+      );
+    }
+
     const deleted = await dependencies.emptyTrash(
       context.env,
       getWorkspaceId(context),
@@ -335,6 +420,13 @@ export const registerMemoRoutes = (
     if (denied) return denied;
 
     try {
+      await assertMemoAccess(
+        context,
+        context.req.param("id"),
+        "read",
+        await resolveRequestNotebookAccess(context),
+        "list revisions of this memo",
+      );
       const revisions = await dependencies.listMemoRevisions(
         context.env.storage.db,
         getWorkspaceId(context),
@@ -352,6 +444,13 @@ export const registerMemoRoutes = (
     if (denied) return denied;
 
     try {
+      await assertMemoAccess(
+        context,
+        context.req.param("id"),
+        "write",
+        await resolveRequestNotebookAccess(context),
+        "restore this memo's revision",
+      );
       const memo = await dependencies.restoreMemoRevision(
         context.env.storage.db,
         getWorkspaceId(context),
@@ -367,6 +466,15 @@ export const registerMemoRoutes = (
   });
 
   const updateMemo = async (context: AppContext, memoId: string, input: MemoUpdateInput) => {
+    try {
+      const notebookAccess = await resolveRequestNotebookAccess(context);
+      await assertMemoAccess(context, memoId, "write", notebookAccess, "update this memo");
+      if (input.notebookId) {
+        assertNotebookAccess(notebookAccess, "write", input.notebookId, "move this memo");
+      }
+    } catch (error) {
+      return handleAppError(context, error);
+    }
     const auth = context.get("auth");
     const previous = await dependencies.getMemoDetail(context.env.storage.db, getWorkspaceId(context), memoId);
     // 章节编辑只给出标题，服务端在已存正文里定位并合并；正文整体替换与章节编辑互斥。
@@ -453,6 +561,13 @@ export const registerMemoRoutes = (
     if (denied) return denied;
 
     try {
+      await assertMemoAccess(
+        context,
+        context.req.param("id"),
+        "write",
+        await resolveRequestNotebookAccess(context),
+        "delete this memo",
+      );
       await dependencies.deleteMemo(
         context.env,
         getWorkspaceId(context),
@@ -471,6 +586,13 @@ export const registerMemoRoutes = (
     if (denied) return denied;
 
     try {
+      await assertMemoAccess(
+        context,
+        context.req.param("id"),
+        "write",
+        await resolveRequestNotebookAccess(context),
+        "restore this memo",
+      );
       const memo = await dependencies.restoreMemo(
         context.env.storage.db,
         getWorkspaceId(context),
@@ -488,10 +610,22 @@ export const registerMemoRoutes = (
     if (denied) return denied;
 
     try {
+      const input = context.req.valid("json");
+      const notebookAccess = await resolveRequestNotebookAccess(context);
+      await assertMemoAccess(
+        context,
+        context.req.param("id"),
+        "write",
+        notebookAccess,
+        "duplicate this memo",
+      );
+      if (input.notebookId) {
+        assertNotebookAccess(notebookAccess, "write", input.notebookId, "duplicate a memo into this notebook");
+      }
       const memo = await dependencies.duplicateMemo(
         context,
         context.req.param("id"),
-        context.req.valid("json"),
+        input,
         getAuditActor(context),
         getActorLabel(context),
       );
@@ -506,10 +640,16 @@ export const registerMemoRoutes = (
     if (denied) return denied;
 
     try {
+      const input = context.req.valid("json");
+      const notebookAccess = await resolveRequestNotebookAccess(context);
+      await assertMemoIdsAccess(context, input.memoIds, notebookAccess, "merge these memos");
+      if (input.notebookId) {
+        assertNotebookAccess(notebookAccess, "write", input.notebookId, "merge memos into this notebook");
+      }
       const memo = await dependencies.mergeMemos(
         context.env.storage.db,
         getWorkspaceId(context),
-        context.req.valid("json"),
+        input,
         getAuditActor(context),
         getActorLabel(context),
       );

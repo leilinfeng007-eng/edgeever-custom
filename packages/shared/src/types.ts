@@ -3,6 +3,7 @@ import type { AttachmentSource } from "./attachment-source";
 import type { TiptapDoc } from "./content";
 import type { AiAction, AiPromptParameterKind, AiPromptResultMode } from "./ai-assistant";
 import type { DiagramKind, DiagramSummaryPreview } from "./diagram";
+import type { TokenNotebookAccess, TokenNotebookAccessLevel } from "./schemas";
 import type { TableSummaryPreview } from "./table";
 
 export type NoteCreateKind = DiagramKind | "infographic" | "table" | "poster";
@@ -305,6 +306,14 @@ export type ApiToken = {
   name: string;
   token: string | null;
   scopes: string[];
+  /**
+   * Per-notebook grants. `null` (the default, and every token created before
+   * this field existed) means the token is not restricted to specific
+   * notebooks and keeps reaching the whole workspace.
+   */
+  notebookAccess: TokenNotebookAccess[] | null;
+  /** The single access level applied to the whole whitelist. */
+  notebookAccessLevel: TokenNotebookAccessLevel;
   lastUsedAt: string | null;
   expiresAt: string | null;
   isRevoked: boolean;

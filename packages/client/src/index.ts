@@ -92,6 +92,8 @@ import type {
   PluginAiGenerateRequest,
   PluginPublicFetchRequest,
   PluginPublicFetchResponse,
+  TokenNotebookAccess,
+  TokenNotebookAccessLevel,
 } from "@edgeever/shared";
 
 export { createClientUuid } from "./client-id";
@@ -1395,9 +1397,27 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     listApiTokens: () => request<ListApiTokensResponse>("/api/v1/api-tokens"),
 
-    createApiToken: (payload: { name: string; scopes: string[]; expiresAt?: string | null }) =>
+    createApiToken: (payload: {
+      name: string;
+      scopes: string[];
+      expiresAt?: string | null;
+      notebookAccess?: TokenNotebookAccess[] | null;
+      notebookAccessLevel?: TokenNotebookAccessLevel;
+    }) =>
       request<CreatedApiToken>("/api/v1/api-tokens", {
         method: "POST",
+        body: JSON.stringify(payload),
+      }),
+
+    updateApiToken: (tokenId: string, payload: {
+      name?: string;
+      scopes?: string[];
+      expiresAt?: string | null;
+      notebookAccess?: TokenNotebookAccess[] | null;
+      notebookAccessLevel?: TokenNotebookAccessLevel;
+    }) =>
+      request<{ apiToken: ApiToken }>(`/api/v1/api-tokens/${encodeURIComponent(tokenId)}`, {
+        method: "PATCH",
         body: JSON.stringify(payload),
       }),
 

@@ -3,6 +3,7 @@ import type { AuditActor } from "../api-context";
 import { AppError } from "../common/app-error";
 import { auditStatement } from "../common/audit";
 import { createId, isoNow, slugify } from "../common/entity-utils";
+import { notebookIdsBind, notebookInListSql, type NotebookAccess } from "../auth/token-notebook-access";
 import type { DatabaseAdapter } from "../storage/storage-contract";
 import { isInboxNotebook, workspaceInboxId } from "../workspace/workspace-provisioning";
 
@@ -91,16 +92,26 @@ export const notebookSelectSql = (tail: string) => `
   ${tail}
 `;
 
-export const listNotebooks = async (db: DatabaseAdapter, workspaceId: string): Promise<Notebook[]> => {
+export const listNotebooks = async (
+  db: DatabaseAdapter,
+  workspaceId: string,
+  notebookAccess?: NotebookAccess,
+): Promise<Notebook[]> => {
+  const accessFilter = notebookAccess?.restricted
+    ? `AND ${notebookInListSql("n.id", notebookAccess.readableNotebookIds)}`
+    : "";
+  const accessBinds = notebookAccess?.restricted && notebookAccess.readableNotebookIds.length > 0
+    ? [notebookIdsBind(notebookAccess.readableNotebookIds)]
+    : [];
   const rows = await db
     .prepare(
       notebookSelectSql(
-        `WHERE n.workspace_id = ? AND n.is_deleted = 0
+        `WHERE n.workspace_id = ? AND n.is_deleted = 0 ${accessFilter}
          GROUP BY n.id, n.parent_id, n.name, n.slug, n.icon, n.color, n.text_color, n.color_target, n.is_bold, n.icon_inverted, n.row_inverted, n.sort_order, n.created_at, n.updated_at
          ORDER BY n.parent_id IS NOT NULL, n.sort_order ASC, n.name ASC`
       )
     )
-    .bind(workspaceId).all<NotebookRow>();
+    .bind(workspaceId, ...accessBinds).all<NotebookRow>();
 
   return rows.results.map(mapNotebook);
 };
@@ -110,10 +121,10 @@ const normalizeNotebookLookupName = (value: string) => value.trim().toLocaleLowe
 export const findNotebooks = async (
   db: DatabaseAdapter,
   workspaceId: string,
-  options: { name: string; parentId?: string | null; exact: boolean; limit: number },
+  options: { name: string; parentId?: string | null; exact: boolean; limit: number; notebookAccess?: NotebookAccess },
 ) => {
   const query = normalizeNotebookLookupName(options.name);
-  const notebooks = await listNotebooks(db, workspaceId);
+  const notebooks = await listNotebooks(db, workspaceId, options.notebookAccess);
   return notebooks
     .filter((notebook) => {
       if (options.parentId !== undefined && notebook.parentId !== options.parentId) {
@@ -125,13 +136,18 @@ export const findNotebooks = async (
     .slice(0, options.limit);
 };
 
-export const resolveNotebookPath = async (db: DatabaseAdapter, workspaceId: string, path: string) => {
+export const resolveNotebookPath = async (
+  db: DatabaseAdapter,
+  workspaceId: string,
+  path: string,
+  notebookAccess?: NotebookAccess,
+) => {
   const segments = path.split("/").map((segment) => segment.trim()).filter(Boolean);
   if (segments.length === 0) {
     throw new AppError("invalid_params", "path must contain at least one notebook name", 400);
   }
 
-  const notebooks = await listNotebooks(db, workspaceId);
+  const notebooks = await listNotebooks(db, workspaceId, notebookAccess);
   const matched: Notebook[] = [];
   let parentId: string | null = null;
 
@@ -167,7 +183,15 @@ export const resolveNotebookPath = async (db: DatabaseAdapter, workspaceId: stri
   };
 };
 
-export const getNotebook = async (db: DatabaseAdapter, workspaceId: string, id: string): Promise<Notebook | null> => {
+export const getNotebook = async (
+  db: DatabaseAdapter,
+  workspaceId: string,
+  id: string,
+  notebookAccess?: NotebookAccess,
+): Promise<Notebook | null> => {
+  if (notebookAccess?.restricted && !notebookAccess.readableNotebookIds.includes(id)) {
+    return null;
+  }
   const row = await db
     .prepare(
       notebookSelectSql(
@@ -439,15 +463,25 @@ export const restoreNotebookRecord = async (
   actor: AuditActor
 ) => {
   const current = await db.prepare(
-    `SELECT id FROM notebooks WHERE id = ? AND workspace_id = ? AND is_deleted = 1`
-  ).bind(id, workspaceId).first<{ id: string }>();
+    `SELECT id, parent_id FROM notebooks WHERE id = ? AND workspace_id = ? AND is_deleted = 1`
+  ).bind(id, workspaceId).first<{ id: string; parent_id: string | null }>();
   if (!current) throw new AppError("not_found", "Deleted notebook not found", 404);
+
+  // 恢复的子本不能挂在仍被删除的父本下：那样它在树里不可达，也会在父本
+  // 日后恢复时静默继承父本的授权。父本不活跃时挂到工作区根。
+  let parentId = current.parent_id;
+  if (parentId) {
+    const parentLive = await db.prepare(
+      `SELECT id FROM notebooks WHERE id = ? AND workspace_id = ? AND is_deleted = 0`,
+    ).bind(parentId, workspaceId).first<{ id: string }>();
+    if (!parentLive) parentId = null;
+  }
 
   const now = isoNow();
   await db.batch([
     db.prepare(
-      `UPDATE notebooks SET is_deleted = 0, deleted_at = NULL, updated_at = ? WHERE id = ? AND workspace_id = ?`
-    ).bind(now, id, workspaceId),
+      `UPDATE notebooks SET is_deleted = 0, deleted_at = NULL, parent_id = ?, updated_at = ? WHERE id = ? AND workspace_id = ?`
+    ).bind(parentId, now, id, workspaceId),
     auditStatement(db, actor.actorType, actor.actorId, "notebook.restore", "notebook", id, {}),
   ]);
 

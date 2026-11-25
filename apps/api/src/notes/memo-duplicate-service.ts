@@ -10,6 +10,7 @@ import { notebookExists } from "./notebook-service";
 import { resolveObjectStorage } from "../storage/object-storage";
 import { inferImageExtension } from "../attachments/resource-service";
 import { getWorkspaceId } from "../auth/request-auth";
+import { memoNotebookAccessSql, notebookAccessBinds, type NotebookAccess } from "../auth/token-notebook-access";
 import type { DatabaseAdapter } from "../storage/storage-contract";
 
 /**
@@ -279,6 +280,8 @@ export const findMemoDuplicates = async (
     contentHash?: string | null;
     excludeMemoId?: string;
     limit?: number;
+    /** 受限 Token 只检索可读笔记本内的候选，避免经候选泄漏越权内容。 */
+    notebookAccess?: NotebookAccess;
   },
 ): Promise<MemoDuplicateCandidate[]> => {
   const limit = Math.min(Math.max(input.limit ?? MEMO_DUPLICATE_CANDIDATE_LIMIT, 1), 20);
@@ -286,6 +289,12 @@ export const findMemoDuplicates = async (
   const contentHash = input.contentHash ?? "";
   if (!normalizedTitle && !contentHash) return [];
   const excludeMemoId = input.excludeMemoId ?? "";
+  const accessFilter = input.notebookAccess?.restricted
+    ? `AND ${memoNotebookAccessSql("m.notebook_id", input.notebookAccess, "read")}`
+    : "";
+  const accessBinds = input.notebookAccess?.restricted
+    ? notebookAccessBinds(input.notebookAccess, "read")
+    : [];
   // SQL only pre-filters with the forms it can compute itself: the trimmed
   // title in both the stored and the NFKC-normalized spelling. The exact,
   // whitespace-insensitive comparison happens below.
@@ -298,6 +307,7 @@ export const findMemoDuplicates = async (
      WHERE m.workspace_id = ? AND m.is_deleted = 0 AND m.is_archived = 0
        AND (? = '' OR m.id <> ?)
        AND (lower(trim(m.title)) IN (?, ?) OR (? <> '' AND c.content_hash = ?))
+       ${accessFilter}
      ORDER BY m.updated_at DESC, m.id DESC
      LIMIT ?`,
   ).bind(
@@ -308,6 +318,7 @@ export const findMemoDuplicates = async (
     normalizedTitle,
     contentHash,
     contentHash,
+    ...accessBinds,
     limit * 4,
   ).all<{
     id: string;
