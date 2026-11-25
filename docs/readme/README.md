@@ -1,12 +1,18 @@
 [Project entry](../../README.md) · [Source map](../source-map.md)
 
 <div align="center">
-  <h1>
-    <img src="../../assets/brand/edgeever-icon.svg" alt="EdgeEver logo" width="48" align="absmiddle" /> EdgeEver
-  </h1>
-  <p>
-    <b>AI-native note-taking app & Evernote/Obsidian alternative. Instant all-platform sync, rich notes (tables, mind maps, diagrams, posters), web clipper & MCP. 100% free on Cloudflare or Docker.</b>
-  </p>
+
+# <img src="../../assets/brand/edgeever-icon.svg" alt="EdgeEver" width="40" align="absmiddle" /> EdgeEver Custom
+
+**Turn AI conversations, troubleshooting steps and attachments into notes you can keep extending when the same problem comes back.**
+
+Based on official EdgeEver **v2.28.2**
+
+[Official project](https://github.com/tianma-if/edgeever) · [MCP setup](../mcp-guide.md) · [Quick start](#deployment) · [简体中文](README.zh-CN.md)
+
+</div>
+
+<div align="center">
   <p>
     <a href="https://github.com/tianma-if/edgeever/stargazers"><img src="https://img.shields.io/github/stars/tianma-if/edgeever?style=social" alt="GitHub Stars" /></a>
     <a href="https://github.com/tianma-if/edgeever/network/members"><img src="https://img.shields.io/github/forks/tianma-if/edgeever?style=social" alt="GitHub Forks" /></a>
@@ -16,6 +22,34 @@
     <a href="https://hellogithub.com/repository/tianma-if/edgeever" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=150fee4403f6433880bda91e9576ac06&claim_uid=TWNAjisURpnhL1l&theme=small" alt="Featured｜HelloGitHub" /></a>
     <a href="#sponsor--support"><img src="https://img.shields.io/badge/Sponsor-EdgeEver-ea4aaa?logo=github-sponsors" alt="Sponsor & Support" /></a>
   </p>
+</div>
+
+## What official EdgeEver does
+
+A three-pane notes editor — notebook tree, note list, and the note itself with outline — covering rich formats such as tables, mind maps, diagrams and posters.
+
+Syncs across Web, desktop, iOS and Android, with a browser extension for one-click web clipping.
+
+Native MCP, so clients like Claude Code, Cursor and VS Code can read and write your notes directly.
+
+Self-hosting on Cloudflare Workers + D1 + R2 with no server to run, or with Docker on your own VPS / NAS.
+
+## What this fork adds
+
+- **AI conversation capture with same-topic supplements** — save a conversation as a note following a template that records the conclusion, the evidence, and what was verified. When the same topic comes up again, check the existing note first, then supplement it or save a new one.
+- **Precise MCP updates** — the agent finds the existing note, then updates only the section you name, leaving the rest of the body and its attachment references untouched.
+- **Attachment reading and source summaries** — the agent reads Word, text and PDF files page by page, records filename, page number or source, and produces a de-duplicated attachment summary.
+- **Per-notebook authorization** — grant clients such as WorkBuddy access to specific notebooks and their sub-notebooks, set to read-only or read/write.
+
+> **Per-notebook authorization** was introduced by official v2.31.0. This fork ports it and extends the authorization checks to its custom MCP tools.
+
+## A real workflow
+
+Use AI to diagnose a problem → save the conclusion and attachments as a note → next time the same topic appears, check the existing note → add the new findings to that note.
+
+The note grows richer over time instead of scattering across chat windows.
+
+<div align="center">
   <p>
     <a href="README.zh-CN.md">简体中文</a> | <a href="README.zh-TW.md">繁體中文</a> | <b>English</b> | <a href="README.es.md">Español</a> | <a href="README.de.md">Deutsch</a> | <a href="README.fr.md">Français</a> | <a href="README.ja.md">日本語</a> | <a href="README.pl-PL.md">Polski</a> | <a href="README.ru.md">Русский</a>
   </p>
@@ -27,10 +61,11 @@
     <a href="#features">Feature Matrix & Capabilities</a> &nbsp;|&nbsp;
     <a href="../note-migration-guide.en-US.md">📥 Note Migration</a>
   </p>
-  <p align="center">
-    <img src="../../assets/readme/edgeever-hero-v8-en.png" alt="EdgeEver Workspace Preview" width="800" />
-  </p>
 </div>
+
+<p align="center">
+  <img src="../../assets/readme/edgeever-hero-v8-en.png" alt="EdgeEver Workspace Preview" width="800" />
+</p>
 
 EdgeEver is a modern, open-source notes and knowledge base workspace. It preserves the classic, high-efficiency three-pane productivity workflow (Tree View · Note List · Editor) while offering an open data architecture and seamless AI Agent integration for complete ownership and smart productivity.
 
